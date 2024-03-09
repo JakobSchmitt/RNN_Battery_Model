@@ -40,7 +40,7 @@ def main(cfg):
         dirpath="weights/",
         filename=cfg.method.mode
         + "-monitor_val"
-        + "-{epoch:02d}-{train_loss:.6f}-{val_loss:.6f}-{val_r2_score:.3f}",
+        + "-{epoch:02d}-{train_loss:.6f}-{val_loss:.6f}-{val_mae:.3f}",
         monitor="val_loss",
         # every_n_train_steps=cfg.every_n_train_steps,
         mode="min",
@@ -51,7 +51,7 @@ def main(cfg):
         dirpath="weights/",
         filename=cfg.method.mode
         + "-monitor_train"
-        + "-{epoch:02d}-{train_loss:.6f}-{val_loss:6f}-{val_r2_score:.3f}",
+        + "-{epoch:02d}-{train_loss:.6f}-{val_loss:6f}-{val_mae:.3f}",
         monitor="train_loss",
         # every_n_train_steps=cfg.every_n_train_steps,
         mode="min",
