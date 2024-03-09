@@ -1,0 +1,18 @@
+defaults:
+  - method: rnn
+  - logger: wandb
+  - _self_
+num_workers: 24  # Number of workers for DataLoader
+loss: mse
+lr: 1e-2
+epochs: 10_000
+num_gpus: 1
+strategy: auto
+every_n_train_steps: 1
+log_every_n_steps: 1
+val_check_interval: 1
+
+hydra:
+  job:
+    chdir: True
+    
