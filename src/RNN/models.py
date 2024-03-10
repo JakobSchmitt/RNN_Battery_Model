@@ -157,6 +157,37 @@ class EncoderDecoderGRU(LightningModule):
         self.log("val_rmse", self.val_rmse, on_epoch=True, on_step=True)
         return val_loss
 
+    def test_step(self, batch):
+        encoder_input, decoder_input, decoder_output = batch
+
+        predicted_output = self(encoder_input, decoder_input)
+        test_loss = self.loss(predicted_output, decoder_output)
+        # self.test_r2_score(predicted_output.squeeze(), decoder_output.squeeze()) #TODO: Fix
+        if self.normalize:
+            decoder_output = (
+                decoder_output * (self.voltage_max - self.voltage_min)
+                + self.voltage_min
+            )
+            predicted_output = (
+                predicted_output * (self.voltage_max - self.voltage_min)
+                + self.voltage_min
+            )
+        self.test_mae(predicted_output, decoder_output)
+        self.test_mape(predicted_output, decoder_output)
+        self.test_rmse(predicted_output, decoder_output)
+        self.log(
+            "test_loss",
+            test_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+        )
+        # self.log("test_r2_score", self.test_r2_score, on_epoch=True, prog_bar=True) #TODO: Fix
+        self.log("test_mae", self.test_mae, on_epoch=True, on_step=True, prog_bar=True)
+        self.log("test_mape", self.test_mape, on_epoch=True, on_step=True)
+        self.log("test_rmse", self.test_rmse, on_epoch=True, on_step=True)
+        return test_loss
+
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
