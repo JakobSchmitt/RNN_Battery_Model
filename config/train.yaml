@@ -2,12 +2,18 @@ defaults:
   - method: rnn
   - logger: wandb
   - _self_
+  
 num_workers: 24  # Number of workers for DataLoader
 loss: mse
 lr: 1e-2
 epochs: 10_000
 num_gpus: 1
 strategy: auto
+
+model_checkpoint: True
+pretrained_weights: /home/mazin/Projects/Thesis/RNN/outputs/2024-03-10/00-50-49/weights/SEFD-monitor_val-epoch=1633-train_loss=0.000063-val_loss=0.000002-val_mae=0.001.ckpt
+test: False
+
 every_n_train_steps: 1
 log_every_n_steps: 1
 val_check_interval: 1

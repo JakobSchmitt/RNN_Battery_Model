@@ -25,16 +25,20 @@ def main(cfg):
         shuffle=cfg.method.shuffle,
     )
 
-    model = EncoderDecoderGRU(
-        encoder_dim=cfg.method.encoder_dim,
-        decoder_dim=cfg.method.decoder_dim,
-        hidden_size=cfg.method.hidden_size,
-        encoder_layers=cfg.method.encoder_layers,
-        decoder_layers=cfg.method.decoder_layers,
-        dropout=cfg.method.dropout,
-        lr=cfg.lr,
-    )
-    logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
+    if cfg.model_checkpoint == True:
+        model = EncoderDecoderGRU.load_from_checkpoint(cfg.pretrained_weights)
+        logging.info(f"{cfg.method.mode} : Model loaded using checkpoint")
+    else:
+        model = EncoderDecoderGRU(
+            encoder_dim=cfg.method.encoder_dim,
+            decoder_dim=cfg.method.decoder_dim,
+            hidden_size=cfg.method.hidden_size,
+            encoder_layers=cfg.method.encoder_layers,
+            decoder_layers=cfg.method.decoder_layers,
+            dropout=cfg.method.dropout,
+            lr=cfg.lr,
+        )
+        logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
 
     checkpoint_callback_val = ModelCheckpoint(
         dirpath="weights/",
@@ -58,6 +62,10 @@ def main(cfg):
         save_top_k=10,
     )
     wandb_logger = WandbLogger(**cfg.logger)
+    wandb_logger.experiment.config["test"] = cfg.test
+    wandb_logger.experiment.config["model_checkpoint"] = cfg.model_checkpoint
+    if cfg.model_checkpoint == True:
+        wandb_logger.experiment.config["pretrained_weights"] = cfg.pretrained_weights
 
     trainer = L.Trainer(
         callbacks=[checkpoint_callback_val, checkpoint_callback_train],
@@ -70,8 +78,14 @@ def main(cfg):
         logger=wandb_logger,
     )
 
-    logging.info(f"{cfg.method.mode} : Starting training ...")
-    trainer.fit(model, data)
+    if not cfg.test:
+        logging.info(f"{cfg.method.mode} : Starting training ...")
+        trainer.fit(model, data)
+    else:
+        logging.info(f"{cfg.method.mode} : Starting validating ...")
+        trainer.validate(model, data)
+        logging.info(f"{cfg.method.mode} : Starting testing ...")
+        trainer.test(model, data)
 
 
 if __name__ == "__main__":
