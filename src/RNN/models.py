@@ -47,7 +47,6 @@ class EncoderDecoderGRU(LightningModule):
         self.output_layer = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(hidden_size, decoder_dim),
-            nn.Tanh(),  # TODO: Compare performance with and without Tanh
         )
         self.loss = nn.MSELoss()
         # Setup metrics
