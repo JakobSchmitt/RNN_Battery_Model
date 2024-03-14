@@ -1,13 +1,17 @@
 import torch
+import numpy as np
+import pandas as pd
 import torch.nn as nn
 import torch.optim as optim
 from lightning import LightningModule
+from numpy.lib.stride_tricks import sliding_window_view
 from torchmetrics.regression import (
     R2Score,
     MeanAbsoluteError,
     MeanAbsolutePercentageError,
     MeanSquaredError,
 )
+from torchmetrics.functional.regression import mean_absolute_error
 
 
 class EncoderDecoderGRU(LightningModule):
@@ -155,6 +159,146 @@ class EncoderDecoderGRU(LightningModule):
         self.log("val_mape", self.val_mape, on_epoch=True, on_step=True)
         self.log("val_rmse", self.val_rmse, on_epoch=True, on_step=True)
         return val_loss
+
+    def on_validation_epoch_end(
+        self, encoder_input_length=20, decoder_input_length=1980
+    ):
+        # TODO: Fix this quick hard coded implementation
+        curve_dir = {}
+        curve_dir[1] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/1/1_4_0_0.csv"
+        )
+        curve_dir[2] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/2/2_4_0_0.csv"
+        )
+        curve_dir[3] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/3/3_4_0_0.csv"
+        )
+        curve_dir[4] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/4/4_4_0_0.csv"
+        )
+        curve_dir[5] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/5/5_4_0_0.csv"
+        )
+        curve_dir[6] = (
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/6/6_4_0_0.csv"
+        )
+        encoder_input_length = 20
+        decoder_input_length = 1980
+        # actual_current_dict = {}
+        # actual_voltage_dict = {}
+        # predicted_voltage_dict = {}
+
+        for profile in curve_dir:
+            curve = pd.read_csv(curve_dir[profile], usecols=["voltage", "current"])
+            last_sample_length = (
+                curve[encoder_input_length:].shape[0] % decoder_input_length
+            )
+            # Apply MinMax Normalization -> [0,1]
+            curve["voltage"] = (curve["voltage"] - self.voltage_min) / (
+                self.voltage_max - self.voltage_min
+            )
+            curve["current"] = (curve["current"] - self.current_min) / (
+                self.current_max - self.current_min
+            )
+            actual_current = torch.tensor(
+                curve["current"], dtype=torch.float
+            )  # TODO: Not needed for evaluation
+            actual_voltage = torch.tensor(curve["voltage"], dtype=torch.float)
+            predicted_voltage = torch.zeros(curve.shape[0], dtype=torch.float)
+            curve_sliding_samples = sliding_window_view(
+                curve[encoder_input_length:], (decoder_input_length, 2)
+            ).squeeze()
+            curve_samples = torch.tensor(
+                np.concatenate(
+                    (
+                        curve_sliding_samples[::decoder_input_length],
+                        curve_sliding_samples[-1:],
+                    ),
+                    axis=0,
+                ),
+                dtype=torch.float,
+            )
+            encoder_input = (
+                torch.tensor(curve[:encoder_input_length].to_numpy(), dtype=torch.float)
+                .unsqueeze(0)
+                .to("cuda")
+            )
+
+            decoder_input = curve_samples[0, :, 1].reshape(1, -1, 1).to("cuda")
+            predicted_voltage[:encoder_input_length] = encoder_input[:, :, 0]
+            self.eval()
+            with torch.inference_mode():
+                output = self(encoder_input, decoder_input)
+            predicted_voltage[
+                encoder_input_length : encoder_input_length + decoder_input_length
+            ] = output.squeeze()
+            for i in range(1, curve_samples.shape[0]):
+                if i != curve_samples.shape[0] - 1:
+                    encoder_input = torch.cat(
+                        [
+                            output[:, -encoder_input_length:],
+                            decoder_input[:, -encoder_input_length:],
+                        ],
+                        dim=-1,
+                    )
+                    decoder_input = curve_samples[i, :, 1].reshape(1, -1, 1).to("cuda")
+                    self.eval()
+                    with torch.inference_mode():
+                        output = self(encoder_input, decoder_input)
+                    predicted_voltage[
+                        encoder_input_length
+                        + i * decoder_input_length : encoder_input_length
+                        + (i + 1) * decoder_input_length
+                    ] = output.squeeze()
+                else:
+
+                    # TODO: Write logic for the last sample
+                    encoder_input = torch.cat(
+                        [
+                            output[
+                                :,
+                                last_sample_length
+                                - decoder_input_length
+                                - encoder_input_length : last_sample_length
+                                - decoder_input_length,
+                            ],
+                            decoder_input[
+                                :,
+                                last_sample_length
+                                - decoder_input_length
+                                - encoder_input_length : last_sample_length
+                                - decoder_input_length,
+                            ],
+                        ],
+                        dim=-1,
+                    )
+                    decoder_input = curve_samples[-1, :, 1].reshape(1, -1, 1).to("cuda")
+                    self.eval()
+                    with torch.inference_mode():
+                        output = self(encoder_input, decoder_input)
+                    predicted_voltage[-decoder_input_length:] = output.squeeze()
+                    # Denormalize
+                    actual_current = (
+                        actual_current * (self.current_max - self.current_min)
+                        + self.current_min
+                    )
+                    predicted_voltage = (
+                        predicted_voltage * (self.voltage_max - self.voltage_min)
+                        + self.voltage_min
+                    )
+                    actual_voltage = (
+                        actual_voltage * (self.voltage_max - self.voltage_min)
+                        + self.voltage_min
+                    )
+            self.log(
+                f"profile_{profile}_mae",
+                mean_absolute_error(predicted_voltage, actual_voltage),
+                on_epoch=True,
+            )
+            # actual_current_dict[profile] = actual_current
+            # actual_voltage_dict[profile] = actual_voltage
+            # predicted_voltage_dict[profile] = predicted_voltage
 
     def test_step(self, batch):
         encoder_input, decoder_input, decoder_output = batch
