@@ -24,6 +24,8 @@ def main(cfg):
                 .mean()
                 .interpolate(method="linear")
             )
+            if cfg.change_sign:
+                df["current"] = -df["current"]
             logging.info(f"Shape after resampling : {df.shape[0]}")
 
             logging.info(

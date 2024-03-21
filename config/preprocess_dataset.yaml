@@ -2,9 +2,9 @@ data_dir: "../Data/battery_model_paper/" #Note: Give relative path
 save_folder: "preprocessed_small_20"
 cell_id: "149"
 profiles: ["1", "2", "3", "4", "5", "6"]
-num_sequences: 20
-resampling_rate: "0.1s" # 10Hz -> 0.1s
-
+num_sequences: 20 # Dictates the downsampling rate
+resampling_rate: "0.1s" # Original sampling rate of the dataset
+change_sign: True
 hydra:
   job:
     chdir: True
