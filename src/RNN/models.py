@@ -166,22 +166,22 @@ class EncoderDecoderGRU(LightningModule):
         # TODO: Fix this quick hard coded implementation
         curve_dir = {}
         curve_dir[1] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/1/1_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/1/1_4_0_0.csv"
         )
         curve_dir[2] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/2/2_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/2/2_4_0_0.csv"
         )
         curve_dir[3] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/3/3_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/3/3_4_0_0.csv"
         )
         curve_dir[4] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/4/4_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/4/4_4_0_0.csv"
         )
         curve_dir[5] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/5/5_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/5/5_4_0_0.csv"
         )
         curve_dir[6] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149/6/6_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/6/6_4_0_0.csv"
         )
         encoder_input_length = 20
         decoder_input_length = 1980

@@ -1,22 +1,23 @@
 mode: SEFD
-root_dir: /home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149 # Absolute Directory
+root_dir: /home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149 # Absolute Directory
 # RNN Model parameters
 encoder_dim: 2
 decoder_dim: 1
 hidden_size: 128
 encoder_layers: 1
-decoder_layers: 2
-dropout: 0.3
+decoder_layers: 1
+dropout: 0
 
 # DataModule parameters
 encoder_input_length: 20
-stride: 1
-decoder_input_length: 1
-batch_size: 2048
-shuffle: False
+stride: 35
+decoder_input_length: 1980
+batch_size: 64
+shuffle: True
 
-normalize: True
-voltage_max: 4.2
-voltage_min: 2.5
-current_max: 1
-current_min: -2.5
+#TODO: Pass these configs into the model, dataset, and datamodule
+# normalize: True
+# voltage_max: 4.2
+# voltage_min: 2.5
+# current_max: 1
+# current_min: -2.5
