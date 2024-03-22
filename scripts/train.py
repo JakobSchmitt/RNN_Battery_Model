@@ -46,21 +46,10 @@ def main(cfg):
         + "-monitor_val"
         + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{val_mae:.5f}",
         monitor="val_loss",
-        # every_n_train_steps=cfg.every_n_train_steps,
         mode="min",
-        save_top_k=10,
+        save_top_k=-1,
     )
 
-    checkpoint_callback_train = ModelCheckpoint(
-        dirpath="weights/",
-        filename=cfg.method.mode
-        + "-monitor_train"
-        + "-{epoch:02d}-{train_loss:.7f}-{val_loss:7f}-{val_mae:.5f}",
-        monitor="train_loss",
-        # every_n_train_steps=cfg.every_n_train_steps,
-        mode="min",
-        save_top_k=10,
-    )
     wandb_logger = WandbLogger(**cfg.logger)
     wandb_logger.experiment.config["test"] = cfg.test
     wandb_logger.experiment.config["model_checkpoint"] = cfg.model_checkpoint
@@ -68,10 +57,8 @@ def main(cfg):
         wandb_logger.experiment.config["pretrained_weights"] = cfg.pretrained_weights
 
     trainer = L.Trainer(
-        callbacks=[checkpoint_callback_val, checkpoint_callback_train],
+        callbacks=[checkpoint_callback_val],
         max_epochs=cfg.epochs,
-        # log_every_n_steps=cfg.log_every_n_steps,
-        # val_check_interval=cfg.val_check_interval,
         accelerator="gpu",
         devices=cfg.num_gpus,
         strategy=cfg.strategy,
