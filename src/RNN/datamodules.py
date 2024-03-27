@@ -49,7 +49,7 @@ class UniDataModule(LightningDataModule):
                     profiles=self.val_profiles,
                     encoder_input_length=self.encoder_input_length,
                     decoder_input_length=self.decoder_input_length,
-                    stride=self.decoder_input_length,
+                    stride=self.stride,
                 )
         elif stage == "validate":
             if self.mode == "SEFD":
@@ -58,7 +58,7 @@ class UniDataModule(LightningDataModule):
                     profiles=self.val_profiles,
                     encoder_input_length=self.encoder_input_length,
                     decoder_input_length=self.decoder_input_length,
-                    stride=self.decoder_input_length,
+                    stride=self.stride,
                 )
         elif stage == "predict":
             raise ValueError("Data Module not designed for stage='predict'")
@@ -69,7 +69,7 @@ class UniDataModule(LightningDataModule):
                     profiles=self.test_profiles,
                     encoder_input_length=self.encoder_input_length,
                     decoder_input_length=self.decoder_input_length,
-                    stride=self.decoder_input_length,
+                    stride=self.stride,
                 )
         else:
             raise ValueError(f"Data Module not designed for stage : {stage}")
