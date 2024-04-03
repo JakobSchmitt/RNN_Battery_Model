@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from typing import List
 import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
 from RNN.models import EncoderDecoderGRU
 from sklearn.metrics import (
     r2_score,
@@ -174,16 +175,18 @@ def plot_prediction(
     title: str,
     show_legends: bool = False,  # New argument to control legends visibility
 ):
+    num_plots = len(encoder_current_list)  # Number of plots
+    cmap = get_cmap("tab20")  # Choose a color map, e.g., 'tab10'
+
     # Create subplots
     fig, ax = plt.subplots(2, figsize=(24, 12), sharex=True)
     fig.suptitle(title)
-    i = 0
-    for encoder_current, decoder_current, encoder_voltage, predicted_voltage in zip(
-        encoder_current_list,
-        decoder_current_list,
-        encoder_voltage_list,
-        predicted_voltage_list,
-    ):
+    for i in range(num_plots):
+        encoder_current = encoder_current_list[i]
+        decoder_current = decoder_current_list[i]
+        encoder_voltage = encoder_voltage_list[i]
+        predicted_voltage = predicted_voltage_list[i]
+
         encoder_input_length = len(encoder_current)
         decoder_input_length = len(decoder_current)
 
@@ -194,16 +197,14 @@ def plot_prediction(
             np.arange(decoder_input_length) * time_per_sample + encoder_time[-1]
         )
 
+        color = cmap(i)  # Get color from the color map
+
         # Plot the first set of data on the first subplot
         ax[0].plot(
-            encoder_time,
-            encoder_current,
-            label=f"Encoder Current_{i}",
+            encoder_time, encoder_current, label=f"Encoder Current_{i}", color=color
         )
         ax[0].plot(
-            decoder_time,
-            decoder_current,
-            label=f"Decoder Current_{i}",
+            decoder_time, decoder_current, label=f"Decoder Current_{i}", color=color
         )
         ax[0].set_ylim(-3, 3)
         ax[0].set_ylabel("Current")
@@ -213,14 +214,10 @@ def plot_prediction(
 
         # Plot the second set of data on the second subplot
         ax[1].plot(
-            encoder_time,
-            encoder_voltage,
-            label=f"Encoder Voltage_{i}",
+            encoder_time, encoder_voltage, label=f"Encoder Voltage_{i}", color=color
         )
         ax[1].plot(
-            decoder_time,
-            predicted_voltage,
-            label=f"Predicted Voltage_{i}",
+            decoder_time, predicted_voltage, label=f"Predicted Voltage_{i}", color=color
         )
         ax[1].set_ylim(2, 4.5)
         ax[1].set_xlabel("Time (minutes)")
@@ -228,7 +225,6 @@ def plot_prediction(
         if show_legends:  # Only add legend if show_legends is True
             ax[1].legend()
         ax[1].grid(True)
-        i += 1
 
     # Add a dashed line between the two subplots
     line_position = encoder_time[-1]
@@ -291,3 +287,54 @@ def normalize(tensor, min_value=2.5, max_value=4.2):
 
 def denormalize(tensor, min_value=2.5, max_value=4.2):
     return tensor * (max_value - min_value) + min_value
+
+
+def perform_multiple_predictions(
+    model: EncoderDecoderGRU,
+    encoder_current_values: list,
+    encoder_voltage_values: list,
+    decoder_current_values: list,
+    encoder_input_length: int = 20,
+    decoder_input_length: int = 1980,
+    current_min: float = -2.5,
+    current_max: float = 1.0,
+    voltage_min: float = 2.5,
+    voltage_max: float = 4.2,
+) -> tuple[list, list, list, list]:
+    encoder_current_list = []
+    decoder_current_list = []
+    encoder_voltage_list = []
+    predicted_voltage_list = []
+
+    for encoder_current, encoder_voltage, decoder_current in zip(
+        encoder_current_values, encoder_voltage_values, decoder_current_values
+    ):
+        (
+            encoder_current_result,
+            decoder_current_result,
+            encoder_voltage_result,
+            predicted_voltage_result,
+        ) = behavior_prediction(
+            model,
+            encoder_current,
+            encoder_voltage,
+            decoder_current,
+            encoder_input_length=encoder_input_length,
+            decoder_input_length=decoder_input_length,
+            current_min=current_min,
+            current_max=current_max,
+            voltage_min=voltage_min,
+            voltage_max=voltage_max,
+        )
+
+        encoder_current_list.append(encoder_current_result)
+        decoder_current_list.append(decoder_current_result)
+        encoder_voltage_list.append(encoder_voltage_result)
+        predicted_voltage_list.append(predicted_voltage_result)
+
+    return (
+        encoder_current_list,
+        decoder_current_list,
+        encoder_voltage_list,
+        predicted_voltage_list,
+    )
