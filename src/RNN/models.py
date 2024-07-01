@@ -1,3 +1,9 @@
+"""
+    This script defines the model implementation code and handles the supporting code for training and validation
+"""
+
+#TODO: Clean callback function implementation
+#TODO: To run on CPU, comment the callback function on_validation_epoch_end()
 import torch
 import numpy as np
 import pandas as pd
@@ -15,15 +21,16 @@ from torchmetrics.functional.regression import mean_absolute_error
 
 
 class EncoderDecoderGRU(LightningModule):
+
     def __init__(
         self,
         encoder_dim: int = 2,
         decoder_dim: int = 1,
-        hidden_size: int = 128,
+        hidden_size: int = 64,
         encoder_layers: int = 1,
-        decoder_layers: int = 2,
-        dropout: float = 0.3,
-        lr: float = 0.001,
+        decoder_layers: int = 1,
+        dropout: float = 0.0,
+        lr: float = 0.0001,
         normalize: bool = True,
         voltage_min: float = 2.5,
         voltage_max: float = 4.2,
@@ -32,6 +39,7 @@ class EncoderDecoderGRU(LightningModule):
     ):
         super().__init__()
 
+        ########## Start : Model Architecture Code ##########
         self.encoder = nn.GRU(
             input_size=encoder_dim,
             hidden_size=hidden_size,
@@ -52,8 +60,10 @@ class EncoderDecoderGRU(LightningModule):
             nn.Dropout(dropout),
             nn.Linear(hidden_size, decoder_dim),
         )
+        ########## End : Model Architecture Code ##########
+
         self.loss = nn.MSELoss()
-        # Setup metrics
+
         self.train_r2_score, self.val_r2_score, self.test_r2_score = (
             R2Score(),
             R2Score(),
@@ -95,7 +105,7 @@ class EncoderDecoderGRU(LightningModule):
 
         predicted_output = self(encoder_input, decoder_input)
         train_loss = self.loss(predicted_output, decoder_output)
-        # self.train_r2_score(predicted_output.squeeze(2), decoder_output.squeeze(2)) #TODO: Fix
+        # Denormalize the output to calculate accuracy metrics
         if self.normalize:
             decoder_output = (
                 decoder_output * (self.voltage_max - self.voltage_min)
@@ -105,6 +115,7 @@ class EncoderDecoderGRU(LightningModule):
                 predicted_output * (self.voltage_max - self.voltage_min)
                 + self.voltage_min
             )
+        # Calculate and log metrics
         self.train_mae(predicted_output, decoder_output)
         self.train_mape(predicted_output, decoder_output)
         self.train_rmse(predicted_output, decoder_output)
@@ -115,13 +126,6 @@ class EncoderDecoderGRU(LightningModule):
             on_step=True,
             prog_bar=True,
         )
-        # self.log(
-        #     "train_r2_score",
-        #     self.train_r2_score,
-        #     on_epoch=True,
-        #     on_step=True,
-        #     prog_bar=True,
-        # ) #TODO: Fix
         self.log(
             "train_mae", self.train_mae, on_epoch=True, on_step=True, prog_bar=True
         )
@@ -134,7 +138,7 @@ class EncoderDecoderGRU(LightningModule):
 
         predicted_output = self(encoder_input, decoder_input)
         val_loss = self.loss(predicted_output, decoder_output)
-        # self.val_r2_score(predicted_output.squeeze(), decoder_output.squeeze()) #TODO: Fix
+        # Denormalize the output to calculate accuracy metrics
         if self.normalize:
             decoder_output = (
                 decoder_output * (self.voltage_max - self.voltage_min)
@@ -144,6 +148,7 @@ class EncoderDecoderGRU(LightningModule):
                 predicted_output * (self.voltage_max - self.voltage_min)
                 + self.voltage_min
             )
+        # Calculate and log metrics
         self.val_mae(predicted_output, decoder_output)
         self.val_mape(predicted_output, decoder_output)
         self.val_rmse(predicted_output, decoder_output)
@@ -154,7 +159,6 @@ class EncoderDecoderGRU(LightningModule):
             on_step=True,
             prog_bar=True,
         )
-        # self.log("val_r2_score", self.val_r2_score, on_epoch=True, prog_bar=True) #TODO: Fix
         self.log("val_mae", self.val_mae, on_epoch=True, on_step=True, prog_bar=True)
         self.log("val_mape", self.val_mape, on_epoch=True, on_step=True)
         self.log("val_rmse", self.val_rmse, on_epoch=True, on_step=True)
@@ -163,34 +167,35 @@ class EncoderDecoderGRU(LightningModule):
     def on_validation_epoch_end(
         self, encoder_input_length=20, decoder_input_length=1980
     ):
-        # TODO: Fix this quick hard coded implementation
+        """
+        This function is called at the end of every epoch.
+        It computes the autoregressive loss by using only a small window of initial ground truth measurements.
+        The first stage uses ground truth for the prediction, while the later stages use previous predicted data points for future predictions
+        """
+        #TODO: Fix this quick hard coded implementation
         curve_dir = {}
         curve_dir[1] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/1/1_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/1/1_4_0_0.csv"
         )
         curve_dir[2] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/2/2_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/2/2_4_0_0.csv"
         )
         curve_dir[3] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/3/3_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/3/3_4_0_0.csv"
         )
         curve_dir[4] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/4/4_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/4/4_4_0_0.csv"
         )
         curve_dir[5] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/5/5_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/5/5_4_0_0.csv"
         )
         curve_dir[6] = (
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/positive_discharge_20/149/6/6_4_0_0.csv"
+            "/home/mazin/Projects/Thesis/RNN/Data/149/6/6_4_0_0.csv"
         )
-        encoder_input_length = 20
-        decoder_input_length = 1980
-        # actual_current_dict = {}
-        # actual_voltage_dict = {}
-        # predicted_voltage_dict = {}
 
         for profile in curve_dir:
             curve = pd.read_csv(curve_dir[profile], usecols=["voltage", "current"])
+            # Calculate the residual length for the final sample
             last_sample_length = (
                 curve[encoder_input_length:].shape[0] % decoder_input_length
             )
@@ -203,7 +208,7 @@ class EncoderDecoderGRU(LightningModule):
             )
             actual_current = torch.tensor(
                 curve["current"], dtype=torch.float
-            )  # TODO: Not needed for evaluation
+            )
             actual_voltage = torch.tensor(curve["voltage"], dtype=torch.float)
             predicted_voltage = torch.zeros(curve.shape[0], dtype=torch.float)
             curve_sliding_samples = sliding_window_view(
@@ -252,8 +257,6 @@ class EncoderDecoderGRU(LightningModule):
                         + (i + 1) * decoder_input_length
                     ] = output.squeeze()
                 else:
-
-                    # TODO: Write logic for the last sample
                     encoder_input = torch.cat(
                         [
                             output[
@@ -273,6 +276,7 @@ class EncoderDecoderGRU(LightningModule):
                         ],
                         dim=-1,
                     )
+
                     decoder_input = curve_samples[-1, :, 1].reshape(1, -1, 1).to("cuda")
                     self.eval()
                     with torch.inference_mode():
@@ -296,56 +300,7 @@ class EncoderDecoderGRU(LightningModule):
                 mean_absolute_error(predicted_voltage, actual_voltage),
                 on_epoch=True,
             )
-            # actual_current_dict[profile] = actual_current
-            # actual_voltage_dict[profile] = actual_voltage
-            # predicted_voltage_dict[profile] = predicted_voltage
-
-    def test_step(self, batch):
-        encoder_input, decoder_input, decoder_output = batch
-
-        predicted_output = self(encoder_input, decoder_input)
-        test_loss = self.loss(predicted_output, decoder_output)
-        # self.test_r2_score(predicted_output.squeeze(), decoder_output.squeeze()) #TODO: Fix
-        if self.normalize:
-            decoder_output = (
-                decoder_output * (self.voltage_max - self.voltage_min)
-                + self.voltage_min
-            )
-            predicted_output = (
-                predicted_output * (self.voltage_max - self.voltage_min)
-                + self.voltage_min
-            )
-        self.test_mae(predicted_output, decoder_output)
-        self.test_mape(predicted_output, decoder_output)
-        self.test_rmse(predicted_output, decoder_output)
-        self.log(
-            "test_loss",
-            test_loss,
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-        )
-        # self.log("test_r2_score", self.test_r2_score, on_epoch=True, prog_bar=True) #TODO: Fix
-        self.log("test_mae", self.test_mae, on_epoch=True, on_step=True, prog_bar=True)
-        self.log("test_mape", self.test_mape, on_epoch=True, on_step=True)
-        self.log("test_rmse", self.test_rmse, on_epoch=True, on_step=True)
-        return test_loss
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
-
-
-if __name__ == "__main__":
-    NUM_DIM = 2
-    OUTPUT_DIM = 1
-    BATCH_SIZE = 1
-    m = 20
-    n = 1
-    encoder_input = torch.ones(BATCH_SIZE, m, NUM_DIM)
-    decoder_input = torch.ones(BATCH_SIZE, n, OUTPUT_DIM)
-    model = EncoderDecoderGRU()
-    model.eval()
-    with torch.inference_mode():
-        output = model(encoder_input, decoder_input)
-    assert output.shape == decoder_input.shape
