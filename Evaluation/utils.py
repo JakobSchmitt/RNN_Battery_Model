@@ -164,9 +164,6 @@ def calculate_metrics(actual_voltage: list, predicted_voltage: list):
     print("MAE:", mae)
     print("MAPE:", mape)
 
-    return r2, rmse, mae, mape
-
-
 def plot_prediction(
     encoder_current_list: List[torch.Tensor],
     decoder_current_list: List[torch.Tensor],
