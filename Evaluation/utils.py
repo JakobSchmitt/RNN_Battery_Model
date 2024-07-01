@@ -206,7 +206,7 @@ def plot_prediction(
         ax[0].plot(
             decoder_time, decoder_current, label=f"Decoder Current_{i}", color=color
         )
-        ax[0].set_ylim(-3, 3)
+        ax[0].set_ylim(-3.5, 3.5)
         ax[0].set_ylabel("Current")
         if show_legends:  # Only add legend if show_legends is True
             ax[0].legend()
