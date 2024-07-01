@@ -9,17 +9,42 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 class SEFDataset(Dataset):
     """
-    SlidingEncoder - Uses stride to generate encoder input position in the time series
-    FixedDecoder - After fixing the encoder input position, generate decoder input of fixed length
-    """
+    SEFDataset: A custom PyTorch Dataset implementation
+    https://pytorch.org/docs/stable/data.html#map-style-datasets 
 
+    This dataset class applies sliding window techniques to generate encoder and decoder inputs and outputs. 
+    It takes a full voltage discharge curve as input and generates samples based on the input parameters
+    
+    Parameters:
+    -----------
+    root_dir : Path
+        The root directory containing the profiles' data.
+    profiles : List[int]
+        A list of profile IDs to include in the dataset.
+    encoder_input_length : int, (default=20)
+        The length of the encoder input sequence.
+    decoder_input_length : int, (default=1980)
+        The length of the decoder input sequence.
+    stride : int, optional (default=16)
+        The stride length for the sliding window.
+    normalize : bool, optional (default=True)
+        Whether to normalize the voltage and current values.
+ 
+
+    Methods:
+    --------
+    __len__():
+        Returns the total number of samples in the dataset.
+    __getitem__(idx: int):
+        Retrieves the encoder input, decoder input, and decoder output for the given index.
+    """
     def __init__(
         self,
         root_dir: Path,
         profiles: List[int],
         encoder_input_length: int = 20,
-        decoder_input_length: int = 2000,
-        stride: int = 35,
+        decoder_input_length: int = 1980,
+        stride: int = 16,
         normalize: bool = True,
         voltage_min: float = 2.5,
         voltage_max: float = 4.2,
@@ -41,7 +66,6 @@ class SEFDataset(Dataset):
                 assert curve.shape[0] > (encoder_input_length + decoder_input_length)
                 assert curve.shape[0] > stride
                 if normalize:
-                    # Apply MinMax Normalization -> [0,1]
                     curve["voltage"] = (curve["voltage"] - self.voltage_min) / (
                         self.voltage_max - self.voltage_min
                     )
@@ -84,12 +108,3 @@ class SEFDataset(Dataset):
             self.decoder_input[idx].unsqueeze(1),
             self.decoder_output[idx].unsqueeze(1),
         )
-
-
-if __name__ == "__main__":
-    dataset = SEFDataset(
-        root_dir=Path(
-            "/home/mazin/Projects/Thesis/Data/battery_model_paper/preprocessed_small_20/149"
-        ),
-        profiles=[2],
-    )
