@@ -40,28 +40,24 @@ def main(cfg):
         )
         logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
 
-    checkpoint_callback_val = ModelCheckpoint(
-        dirpath="weights/",
-        filename=cfg.method.mode
-        + "-monitor_val"
-        + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{val_mae:.5f}",
-        monitor="val_loss",
-        mode="min",
-        save_top_k=-1,
-    )
-
     wandb_logger = WandbLogger(**cfg.logger)
     wandb_logger.experiment.config["test"] = cfg.test
     wandb_logger.experiment.config["model_checkpoint"] = cfg.model_checkpoint
     if cfg.model_checkpoint == True:
         wandb_logger.experiment.config["pretrained_weights"] = cfg.pretrained_weights
 
+    checkpoint_callback_val = ModelCheckpoint(
+        dirpath="weights/",
+        filename=wandb_logger.experiment.name
+        + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{val_mae:.5f}",
+        save_top_k=cfg.save_top_k,
+        monitor="val_loss",
+    )
+
     trainer = L.Trainer(
         callbacks=[checkpoint_callback_val],
         max_epochs=cfg.epochs,
-        accelerator="gpu",
-        devices=cfg.num_gpus,
-        strategy=cfg.strategy,
+        accelerator=cfg.device,
         logger=wandb_logger,
     )
 

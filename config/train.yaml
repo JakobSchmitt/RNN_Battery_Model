@@ -11,12 +11,10 @@ num_gpus: 1
 strategy: auto
 
 model_checkpoint: False
-pretrained_weights: /home/mazin/Projects/Thesis/RNN/outputs/silvery-field-185/SEFD-monitor_val-epoch=503-train_loss=0.0000711-val_loss=0.0002140-val_mae=0.01493.ckpt
+pretrained_weights: /home/mazin/Projects/Thesis/RNN/outputs/2024-03-21/10-18-59/weights/SEFD-monitor_val-epoch=1499-train_loss=0.0000147-val_loss=0.0001256-val_mae=0.01213.ckpt
 test: False
-
-every_n_train_steps: 1
-log_every_n_steps: 1
-val_check_interval: 1
+device: gpu
+save_top_k: -1
 
 hydra:
   job:
