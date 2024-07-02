@@ -4,4 +4,4 @@ matplotlib
 pandas
 hydra-core
 wandb
-pip install -e src/
+-e src/
