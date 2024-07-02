@@ -4,6 +4,7 @@ This project presents a training and evaluation strategy that outperforms the or
 
 ## Installation
 
+The python version used is 3.8.18. 
 To install the dependencies, use the following command from the main directory:
 
 ```sh
