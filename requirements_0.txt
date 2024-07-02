@@ -1,7 +1,0 @@
-lightning
-natsort
-matplotlib
-pandas
-hydra-core
-wandb
--e src/
