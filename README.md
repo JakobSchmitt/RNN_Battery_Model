@@ -51,6 +51,10 @@ The scripts are designed to run via the command line from the main directory and
 ```sh
  sbatch alpha-train.sh
 ```
+## Training Logs
+
+Since [hydra](https://hydra.cc/docs/intro/) was used in the project, training checkpoints along with the corresponding hyperparameters and configurations are saved locally in the main directory in the path `outputs/$day$/$time$`  
+By default, model checkpoints are saved every epoch since `save_top_k=-1`. To save for ex: 5 checkpoints with best val_loss, use argument `save_top_k=5`. 
 
 ## Outlook
 * Although the model performs well on the dataset, it needs to be compared to a public benchmark dataset to compare different implementations in the literature.
