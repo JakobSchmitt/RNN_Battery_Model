@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 ## Setup Weights and Biases
 All the hyperparameters and metrics are logged to Weights and Biases by default.  
-To get started with Weights and Biases, create an account on [Weights and Biases](https://wandb.ai/).  
+To get started with Weights and Biases, create an account on [Weights and Biases](https://wandb.ai/).
 For authorization during first training run, an API key is required which can be acquired from https://wandb.ai/authorize  
 
 Documentation for Weights and Biases : https://docs.wandb.ai/
@@ -45,14 +45,12 @@ Additional arguments can be found in `config/method/rnn.yaml` and `config/train.
 The scripts are designed to run via the command line from the main directory and on GPU. To run the model on the CPU, comment out the callback function `on_validation_epoch_end()` in `src/RNN/models.py` and pass the argument `device=cpu`
 
 ## Run on a HPC System
-* First, setup a virtual environment. The documentation to set up a custom virtual environment on TUD HPC cluster : https://compendium.hpc.tu-dresden.de/software/python_virtual_environments/?h=envir#python-virtual-environments
+* First, setup a virtual environment. The documentation to set up a custom virtual environment on TUD HPC cluster can be found here : https://compendium.hpc.tu-dresden.de/software/python_virtual_environments/?h=envir#python-virtual-environments
 * To run the script as a SLURM job, use the bash script `alpha-train.sh`. Update the path to the virtual environment before running the script.
 * After updating the path to the environment, to submit a job:
 ```sh
  sbatch alpha-train.sh
 ```
-
-## Running
 
 ## Outlook
 * Although the model performs well on the dataset, it needs to be compared to a public benchmark dataset to compare different implementations in the literature.
