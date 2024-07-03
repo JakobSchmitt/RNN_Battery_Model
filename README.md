@@ -4,7 +4,12 @@ This project presents a training and evaluation strategy that outperforms the or
 
 ## Installation
 
-The python version used is 3.8.18. 
+To install the python version 3.8.18 and setup the virtual environment using [pyenv](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation):
+```sh
+pyenv install 3.8.18
+pyenv virtualenv 3.8.18 rnn_gru
+pyenv activate rnn_gru
+```
 To install the dependencies, use the following command from the main directory:
 
 ```sh
@@ -15,17 +20,17 @@ pip install -r requirements.txt
 
 To train the model, use the following command from the main directory:
 ```sh
-python scripts/train.py epochs=10
+python scripts/train.py epochs=10 device=gpu
 ``` 
 Arguments for the model and data can be passed directly via the command line. For example:
 ```sh
-python scripts/train.py epochs=5 method.stride=16
+python scripts/train.py epochs=5 method.stride=16 method.decoder_input_length=1980 lr=0.0001
 ``` 
 Additional arguments can be found in `config/method/rnn.yaml` and `config/train.yaml`.
 
 ## Running on CPU
 
-The scripts are designed to run via the command line from the main directory and on GPU. To run the model on the CPU, comment out the callback function `on_validation_epoch_end()` in `src/RNN/models.py`.
+The scripts are designed to run via the command line from the main directory and on GPU. To run the model on the CPU, comment out the callback function `on_validation_epoch_end()` in `src/RNN/models.py` and pass the argument `device=cpu`
 
 ## Outlook
 * Although the model performs well on the dataset, it needs to be compared to a public benchmark dataset to compare different implementations in the literature.
