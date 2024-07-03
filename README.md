@@ -16,17 +16,29 @@ To install the dependencies, use the following command from the main directory:
 pip install -r requirements.txt
 ``` 
 
+## Setup Weights and Biases
+All the hyperparameters and metrics are logged to Weights and Biases by default.  
+To get started with Weights and Biases, create an account on [Weights and Biases](https://wandb.ai/).  
+For authorization during first training run, an API key is required which can be acquired from https://wandb.ai/authorize  
+
+Documentation for Weights and Biases : https://docs.wandb.ai/
+
 ## Training the Model
 
 To train the model, use the following command from the main directory:
 ```sh
 python scripts/train.py epochs=10 device=gpu
-``` 
+```
 Arguments for the model and data can be passed directly via the command line. For example:
 ```sh
 python scripts/train.py epochs=5 method.stride=16 method.decoder_input_length=1980 lr=0.0001
 ``` 
 Additional arguments can be found in `config/method/rnn.yaml` and `config/train.yaml`.
+
+### Note:
+
+* If wandb is not already logged in, the script will ask to sign-in/authorize using the API key on https://wandb.ai/authorize before starting the training process.  
+* In addition to the automatically generated plots on wandb, custom line plots can be added. For ex: to visualize profile 1's accuracy over epoch, create a new panel and select a [line plot](https://docs.wandb.ai/guides/app/features/panels/line-plot). Then set X-axis as `epoch` and Y-axis as `profile_1_mae`.
 
 ## Running on CPU
 
