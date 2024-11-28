@@ -6,6 +6,7 @@ from pathlib import Path
 from torch.utils.data import Dataset
 from numpy.lib.stride_tricks import sliding_window_view
 
+torch.set_float32_matmul_precision('high')
 
 class SEFDataset(Dataset):
     """

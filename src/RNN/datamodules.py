@@ -2,7 +2,8 @@ from pathlib import Path
 from RNN.datasets import SEFDataset
 from torch.utils.data import DataLoader
 from lightning import LightningDataModule
-
+import torch
+torch.set_float32_matmul_precision('high')
 
 class UniDataModule(LightningDataModule):
     """
@@ -160,6 +161,7 @@ class UniDataModule(LightningDataModule):
             shuffle=self.shuffle,
             drop_last=False,
             num_workers=self.num_workers,
+            pin_memory=True
         )
 
     def val_dataloader(self):
@@ -170,6 +172,8 @@ class UniDataModule(LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers,
+            pin_memory=True
+
         )
 
     def test_dataloader(self):
@@ -180,4 +184,6 @@ class UniDataModule(LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers,
+            pin_memory=True
+
         )

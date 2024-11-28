@@ -1,5 +1,5 @@
 mode: SEFD
-root_dir: Data/149
+root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\149
 
 # RNN Model parameters
 encoder_dim: 2
