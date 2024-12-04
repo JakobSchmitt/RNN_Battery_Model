@@ -67,7 +67,7 @@ def plot_voltage_profiles(current_profile_dict, voltage_profile_dict, prediction
         mae = mean_absolute_error(actual_voltage, predicted_voltage)
         mape = mean_absolute_percentage_error(actual_voltage, predicted_voltage)
     
-        plt.title(f"Voltage Profile:  R2 : {r2:.2}  RMSE: {rmse:.2f} \n MAE : {mae:.2f}  MAPE : {mape:.2f}", fontsize=14)
+        plt.title(f"Voltage Profile:  R2 : {r2:.5}  RMSE: {rmse:.5f} \n MAE : {mae:.5f}  MAPE : {mape:.5f}", fontsize=14)
         plt.xlabel("Time Step", fontsize=12)
         plt.ylabel("Voltage (V)", fontsize=12)
         plt.legend(fontsize=12)

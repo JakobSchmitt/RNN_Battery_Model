@@ -51,7 +51,9 @@ def main(cfg):
 
     if cfg.model_checkpoint == True:
         pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
-        model = EncoderDecoderGRU.load_from_checkpoint(list(pretrained_weights_path.glob('*.ckpt'))[0])
+        pretrained_checkpoint = list(pretrained_weights_path.glob('*.ckpt'))[0]
+        model = EncoderDecoderGRU.load_from_checkpoint(pretrained_checkpoint)
+        model.relax_loss = cfg.relax_loss # update for potential loss adaptations
         logging.info(f"{cfg.method.mode} : Model loaded using checkpoint")
     else:
         model = EncoderDecoderGRU(
@@ -67,43 +69,54 @@ def main(cfg):
             voltage_max=cfg.method.voltage_max,
             current_min=cfg.method.current_min,
             current_max=cfg.method.current_max,
+            encoder_input_length=cfg.method.encoder_input_length,
+            decoder_input_length=cfg.method.decoder_input_length,
+            gpu = True if cfg.device =='gpu' else False,
+            relax_loss = cfg.relax_loss
         )
         logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
 
-    # Initialize wandb
-    wandb_logger = WandbLogger(**cfg.logger)
-    wandb_logger.experiment.config["model_checkpoint"] = cfg.model_checkpoint
-    if cfg.model_checkpoint == True:
-        wandb_logger.experiment.config["pretrained_weights"] = cfg.pretrained_weights
 
-    all_checkpoint_callback = ModelCheckpoint(
-        dirpath="weights/all_epochs/",
-        filename=wandb_logger.experiment.name
-        + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{combined_val_loss:.7f}",
-        save_top_k=-1,#cfg.save_top_k,
-        every_n_epochs=1,
-        # monitor="combined_val_loss",#"val_loss",
-        monitor=None,  # Do not monitor any metric; this disables stateful tracking, else error due two stateful callbacks!
+    if not cfg.debug:  # Only use WandB logger if debug is False
+        wandb_logger = WandbLogger(**cfg.logger)
+        wandb_logger.experiment.config["model_checkpoint"] = cfg.model_checkpoint
+        if cfg.model_checkpoint:
+            wandb_logger.experiment.config["pretrained_weights"] = pretrained_checkpoint
+            
+        all_checkpoint_callback = ModelCheckpoint(
+            dirpath="weights/all_epochs/",
+            filename=wandb_logger.experiment.name
+            + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{combined_val_loss:.7f}",
+            save_top_k=-1,#cfg.save_top_k,
+            every_n_epochs=1,
+            monitor=None,  # Do not monitor any metric; this disables stateful tracking, else error due two stateful callbacks!
 
-    )
-    best_checkpoint_callback = ModelCheckpoint(
-        dirpath="weights/best_model/",
-        filename=wandb_logger.experiment.name
-        + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{combined_val_loss:.7f}-best",
-        save_top_k=1,
-        monitor="combined_val_loss",#"val_loss",
-        
-    )
-    
-    load_best_weights_callback = LoadBestWeightsCallback(checkpoint_callback=best_checkpoint_callback)
+        )
+        best_checkpoint_callback = ModelCheckpoint(
+            dirpath="weights/best_model/",
+            filename=wandb_logger.experiment.name
+            + "-{epoch:02d}-{train_loss:.7f}-{combined_val_loss:.7f}-{combined_val_loss_2:.7f}-best",
+            save_top_k=1,
+            monitor="combined_val_loss_2" if cfg.relax_loss else "combined_val_loss",
+            
+        )
+        load_best_weights_callback = LoadBestWeightsCallback(checkpoint_callback=best_checkpoint_callback)
+        trainer = L.Trainer(
+            callbacks=[all_checkpoint_callback, best_checkpoint_callback, load_best_weights_callback],
+            max_epochs=cfg.epochs,
+            accelerator=cfg.device,
+            logger=wandb_logger,
+        )
+            
+    else:
+        wandb_logger = None  # No logging for debug mode
+        logging.info("Debug mode enabled: WandB logging disabled.")
+        trainer = L.Trainer(
+            max_epochs=cfg.epochs,
+            accelerator=cfg.device,
+            logger=wandb_logger,
+        )
 
-
-    trainer = L.Trainer(
-        callbacks=[all_checkpoint_callback, best_checkpoint_callback, load_best_weights_callback],
-        max_epochs=cfg.epochs,
-        accelerator=cfg.device,
-        logger=wandb_logger,
-    )
 
     logging.info(f"{cfg.method.mode} : Starting training ...")
     
@@ -111,28 +124,36 @@ def main(cfg):
     
 
 class LoadBestWeightsCallback(Callback):
-    def __init__(self, checkpoint_callback):
+    def __init__(self, checkpoint_callback,reload_after_epochs=20):
         """
         Args:
             checkpoint_callback: The ModelCheckpoint instance used during training.
         """
         super().__init__()
         self.checkpoint_callback = checkpoint_callback
+        self.reload_after_epochs = reload_after_epochs
+        self.epoch_counter = 0
 
     def on_train_epoch_start(self, trainer, pl_module):
         """
         Called at the start of each training epoch.
         """
-        # Get the path to the best checkpoint
-        best_model_path = self.checkpoint_callback.best_model_path
+        if self.epoch_counter >= self.reload_after_epochs:
+            print(f"Reloading the best model (after {self.reload_after_epochs} epochs)...")
 
-        if best_model_path:
-            # Load state dictionary from the checkpoint file
-            state_dict = torch.load(best_model_path)["state_dict"]
-            pl_module.load_state_dict(state_dict)
-            logging.info(f"Loaded best weights from {best_model_path}")
-        else:
-            logging.warning("No best model checkpoint available to load.")
+            # Get the path to the best checkpoint
+            best_model_path = self.checkpoint_callback.best_model_path
+    
+            if best_model_path:
+                # Load state dictionary from the checkpoint file
+                state_dict = torch.load(best_model_path)["state_dict"]
+                pl_module.load_state_dict(state_dict)
+                logging.info(f"Loaded best weights from {best_model_path}")
+                self.epoch_counter = 0  # Reset counter
+            else:
+                logging.warning("No best model checkpoint available to load.")
+        
+        self.epoch_counter += 1
 
 
 if __name__ == "__main__":

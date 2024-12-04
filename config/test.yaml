@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 model_checkpoint: True
-pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\checkpoints\2024-11-28\polar-sky-201
+pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-03\23-21-37
 
 num_workers: 8  # Number of workers for DataLoader
 device: gpu

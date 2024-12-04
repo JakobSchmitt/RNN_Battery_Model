@@ -57,7 +57,7 @@ class UniDataModule(LightningDataModule):
         test_profiles: list = ["2"],
         encoder_input_length: int = 20,
         stride: int = 16,
-        decoder_input_length: int = 1_980,
+        decoder_input_length: int = 1980,
         batch_size=64,
         num_workers=8,
         shuffle=False,
@@ -161,6 +161,7 @@ class UniDataModule(LightningDataModule):
             shuffle=self.shuffle,
             drop_last=False,
             num_workers=self.num_workers,
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -172,6 +173,7 @@ class UniDataModule(LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers,
+            persistent_workers=True,
             pin_memory=True
 
         )
@@ -184,6 +186,7 @@ class UniDataModule(LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers,
+            persistent_workers=True,
             pin_memory=True
 
         )

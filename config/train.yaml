@@ -3,8 +3,10 @@ defaults:
   - logger: wandb
   - _self_
 
+relax_loss: False
+debug: True
 model_checkpoint: False
-pretrained_weights: ??? # Give absolute path to the checkpoint 
+pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-03\23-21-37
 
 num_workers: 8  # Number of workers for DataLoader
 loss: mse
