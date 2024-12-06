@@ -15,6 +15,9 @@ import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 
 import matplotlib.pyplot as plt
+import os
+import torch
+torch.set_float32_matmul_precision('high')
 
 from sklearn.metrics import (
     r2_score,
@@ -27,10 +30,14 @@ from sklearn.metrics import (
 @hydra.main(version_base="1.1", config_path="../config/", config_name="test")
 def main(cfg):
     
-
-
-    pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
-    model_path = str(list(pretrained_weights_path.glob('*.ckpt'))[0])
+    # pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
+    # model_path = str(list(pretrained_weights_path.glob('*.ckpt'))[0])
+    
+    pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'all_epochs' 
+    all_epoch_files = list(pretrained_weights_path.glob('*.ckpt'))
+    all_epoch_files = sorted(all_epoch_files, key=os.path.getctime)
+    model_path = str(all_epoch_files[233])
+    
     model = EncoderDecoderGRU.load_from_checkpoint(Path(model_path))
     logging.info(f"{cfg.method.mode} : Model loaded using checkpoint")
 

@@ -1,5 +1,5 @@
 mode: SEFD
-root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\149
+root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\129_stoch 
 
 # RNN Model parameters
 encoder_dim: 2
@@ -10,10 +10,10 @@ decoder_layers: 1
 dropout: 0
 
 # DataModule parameters
-encoder_input_length: 20
-stride: 16
-decoder_input_length: 1980 #1960 #
-batch_size: 64
+encoder_input_length: 180
+stride: 64 # 32 # 16
+decoder_input_length: 1920 
+batch_size: 256 # 64
 shuffle: True
 
 # Normalization parameters

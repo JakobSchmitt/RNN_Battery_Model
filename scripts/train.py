@@ -18,6 +18,7 @@ import hydra
 import logging
 from pathlib import Path
 import time
+import os
 
 from RNN.datamodules import UniDataModule
 from RNN.models import EncoderDecoderGRU
@@ -48,11 +49,20 @@ def main(cfg):
         current_min=cfg.method.current_min,
         current_max=cfg.method.current_max,
     )
+    pred_data_dirs = data.train_profiles+data.val_profiles+data.test_profiles
 
     if cfg.model_checkpoint == True:
-        pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
-        pretrained_checkpoint = list(pretrained_weights_path.glob('*.ckpt'))[0]
-        model = EncoderDecoderGRU.load_from_checkpoint(pretrained_checkpoint)
+        # pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
+        # pretrained_checkpoint = list(pretrained_weights_path.glob('*.ckpt'))[0]
+        # model = EncoderDecoderGRU.load_from_checkpoint(pretrained_checkpoint)
+        model_id = 201
+        pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'all_epochs' 
+        all_epoch_files = list(pretrained_weights_path.glob('*.ckpt'))
+        all_epoch_files = sorted(all_epoch_files, key=os.path.getctime)
+        pretrained_checkpoint = str(all_epoch_files[model_id]) 
+        model = EncoderDecoderGRU.load_from_checkpoint(Path(pretrained_checkpoint))
+        # model.pred_data_root_dir = data.root_dir
+        # model.pred_data_dirs = pred_data_dirs
         model.relax_loss = cfg.relax_loss # update for potential loss adaptations
         logging.info(f"{cfg.method.mode} : Model loaded using checkpoint")
     else:
@@ -72,7 +82,9 @@ def main(cfg):
             encoder_input_length=cfg.method.encoder_input_length,
             decoder_input_length=cfg.method.decoder_input_length,
             gpu = True if cfg.device =='gpu' else False,
-            relax_loss = cfg.relax_loss
+            relax_loss = cfg.relax_loss,
+            pred_data_root_dir = data.root_dir,
+            pred_data_dirs = pred_data_dirs
         )
         logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
 
@@ -86,23 +98,16 @@ def main(cfg):
         all_checkpoint_callback = ModelCheckpoint(
             dirpath="weights/all_epochs/",
             filename=wandb_logger.experiment.name
-            + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{combined_val_loss:.7f}",
-            save_top_k=-1,#cfg.save_top_k,
+            + "-{epoch:02d}-{train_loss:.7f}-{val_loss:.7f}-{pred_loss:.7f}-{OCV_area_loss:.7f}",
+            save_top_k=-1,
             every_n_epochs=1,
             monitor=None,  # Do not monitor any metric; this disables stateful tracking, else error due two stateful callbacks!
 
         )
-        best_checkpoint_callback = ModelCheckpoint(
-            dirpath="weights/best_model/",
-            filename=wandb_logger.experiment.name
-            + "-{epoch:02d}-{train_loss:.7f}-{combined_val_loss:.7f}-{combined_val_loss_2:.7f}-best",
-            save_top_k=1,
-            monitor="combined_val_loss_2" if cfg.relax_loss else "combined_val_loss",
-            
-        )
-        load_best_weights_callback = LoadBestWeightsCallback(checkpoint_callback=best_checkpoint_callback)
+
+        
         trainer = L.Trainer(
-            callbacks=[all_checkpoint_callback, best_checkpoint_callback, load_best_weights_callback],
+            callbacks=[all_checkpoint_callback],# best_checkpoint_callback],#, load_best_weights_callback],
             max_epochs=cfg.epochs,
             accelerator=cfg.device,
             logger=wandb_logger,
