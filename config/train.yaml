@@ -5,8 +5,9 @@ defaults:
 
 relax_loss: True
 debug: True
-model_checkpoint: False
-pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-06\13-04-41
+model_checkpoint: True
+pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-06\17-41-23
+model_id: 298
 
 num_workers: 8  # Number of workers for DataLoader
 loss: mse

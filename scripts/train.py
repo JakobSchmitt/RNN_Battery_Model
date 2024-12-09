@@ -55,12 +55,12 @@ def main(cfg):
         # pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
         # pretrained_checkpoint = list(pretrained_weights_path.glob('*.ckpt'))[0]
         # model = EncoderDecoderGRU.load_from_checkpoint(pretrained_checkpoint)
-        model_id = 201
         pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'all_epochs' 
         all_epoch_files = list(pretrained_weights_path.glob('*.ckpt'))
         all_epoch_files = sorted(all_epoch_files, key=os.path.getctime)
-        pretrained_checkpoint = str(all_epoch_files[model_id]) 
-        model = EncoderDecoderGRU.load_from_checkpoint(Path(pretrained_checkpoint))
+        pretrained_checkpoint = str(all_epoch_files[cfg.model_id]) 
+        model = EncoderDecoderGRU.load_from_checkpoint(Path(pretrained_checkpoint),pred_data_root_dir = data.root_dir,
+        pred_data_dirs = pred_data_dirs)
         # model.pred_data_root_dir = data.root_dir
         # model.pred_data_dirs = pred_data_dirs
         model.relax_loss = cfg.relax_loss # update for potential loss adaptations

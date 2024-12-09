@@ -9,6 +9,7 @@ import numpy as np
 from copy import deepcopy
 import time
 import os
+from pathlib import Path
 import pandas as pd
 import torch.nn as nn
 import torch.optim as optim
@@ -46,8 +47,8 @@ class EncoderDecoderGRU(LightningModule):
         decoder_input_length= 1980,
         gpu = True,
         relax_loss = False,
-        pred_data_root_dir=None,
-        pred_data_dirs=None
+        pred_data_root_dir=None,#Path('C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/Data/121_stoch'),
+        pred_data_dirs=None,#['0', '2', '5', '7', '8', '9', '10', '11', '12', '1', '4', '6', '13', '3']
         
     ):
         super().__init__()
@@ -345,7 +346,7 @@ class EncoderDecoderGRU(LightningModule):
         # call for further behavourial metric computation : OCV variance minimisation
         
     
-    def on_validation_epoch_end2(self,relaxation_length = 250):
+    def on_validation_epoch_end2(self, SOH_testing=False, relaxation_length = 250,number_of_subsegments = 5 ,dropped_profiles_list=[]):
         """
         relaxation pauses of length relaxation_length are added sequentially between the prediction sequences, 
         however the model doesn't really see this, as it is always initalised with the load steps before the terminal relaxation sequence
@@ -362,13 +363,14 @@ class EncoderDecoderGRU(LightningModule):
         None.
 
         """
-        # TODO: could be parallelised, so that all 6 profiles are predicted simulaneously?!
-
+        index_list = np.arange(1,number_of_subsegments)
         relaxation_result_dict = dict()
-        index_list = [4,3,2]
+        
         scaled_relax_current =  (np.array([0]) - self.current_min) / ( self.current_max - self.current_min)
 
         for profile, curve in deepcopy(self.curves).items():
+            if profile in dropped_profiles_list:
+                continue
 
             Q_OCV_list = []
 
@@ -403,16 +405,17 @@ class EncoderDecoderGRU(LightningModule):
             self.eval()
             with torch.inference_mode():
                 for index in index_list:
+                    current_index = int(index*self.decoder_input_length /(len(index_list)+1))
                     Q_OCV_list.append(
                         np.array(
                             [
-                                np.cumsum(actual_current[:int(self.decoder_input_length / index)])[-1],
+                                np.cumsum(actual_current[:current_index])[-1],
                                 self(
                                     encoder_input,
                                     torch.tensor(
                                         np.concatenate(
                                             (
-                                                decoder_input[:int(self.decoder_input_length / index)],
+                                                decoder_input[:current_index],
                                                 np.full((relaxation_length), scaled_relax_current),
                                             ),dtype=np.float32
                                         )
@@ -451,16 +454,18 @@ class EncoderDecoderGRU(LightningModule):
                     self.eval()
                     with torch.inference_mode():
                         for index in index_list:
+                            current_index = int(index*self.decoder_input_length /(len(index_list)+1))
+
                             Q_OCV_list.append(
                                 np.array(
                                     [
-                                        last_segment_Q_value + np.cumsum(actual_current[:int(self.decoder_input_length / index)])[-1],
+                                        last_segment_Q_value + np.cumsum(actual_current[:current_index])[-1],
                                         self(
                                             encoder_input,
                                             torch.tensor(
                                                 np.concatenate(
                                                     (
-                                                        decoder_input[:int(self.decoder_input_length / index)],
+                                                        decoder_input[:current_index],
                                                         np.full((relaxation_length), scaled_relax_current),
                                                     ),dtype=np.float32
                                                 )
@@ -494,16 +499,18 @@ class EncoderDecoderGRU(LightningModule):
                         self.eval()
                         with torch.inference_mode():
                             for index in index_list:
+                                current_index = int(index*self.decoder_input_length /(len(index_list)+1))
+
                                 Q_OCV_list.append(
                                     np.array(
                                         [
-                                            last_segment_Q_value + np.cumsum(actual_current[:int(self.decoder_input_length / index)])[-1],
+                                            last_segment_Q_value + np.cumsum(actual_current[:current_index])[-1],
                                             self(
                                                 encoder_input,
                                                 torch.tensor(
                                                     np.concatenate(
                                                         (
-                                                            decoder_input[:int(self.decoder_input_length / index)],
+                                                            decoder_input[:current_index],
                                                             np.full((relaxation_length), scaled_relax_current),
                                                         ),dtype=np.float32
                                                     )
@@ -522,58 +529,60 @@ class EncoderDecoderGRU(LightningModule):
                         last_segment_Q_value = Q_OCV_list[-1][0]
 
 
-                    
-            
-
             relaxation_result_dict[profile] =  np.asarray(Q_OCV_list)
             
 
 
-        points = np.vstack(list(relaxation_result_dict.values()))
-        # rescale OCV values
-        points[:,1] = points[:,1] * (self.voltage_max - self.voltage_min) + self.voltage_min
-        # normalize
-        x = points[:, 0]
-        y = points[:, 1]
-        # scale Q
-        x_scaled = (x - x.min()) / (x.max() - x.min())
         
-        # Combine scaled x and y back into a single array
-        points = np.column_stack((x_scaled, y))
-                                        
-        alpha = 3 
-        concave_hull = alphashape.alphashape(points, alpha)  
-
-        if not  isinstance(concave_hull, Polygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
-            alpha=2
+        if not SOH_testing:
+            
+            points = np.vstack(list(relaxation_result_dict.values()))
+            # unscale OCV values
+            points[:,1] = points[:,1] * (self.voltage_max - self.voltage_min) + self.voltage_min
+            # normalize
+            x = points[:, 0]
+            y = points[:, 1]
+            # scale Q
+            x_scaled = (x - x.min()) / (x.max() - x.min())
+            
+            # Combine scaled x and y back into a single array
+            points = np.column_stack((x_scaled, y))
+                                            
+            alpha = 3 
             concave_hull = alphashape.alphashape(points, alpha)  
+    
             if not  isinstance(concave_hull, Polygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
-                alpha=1
+                alpha=2
                 concave_hull = alphashape.alphashape(points, alpha)  
                 if not  isinstance(concave_hull, Polygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
-                    alpha=0.1
+                    alpha=1
                     concave_hull = alphashape.alphashape(points, alpha)  
-                    
-        OCV_area_loss = concave_hull.area
-        
-        # plot hull
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.scatter(points[:,0],points[:,1])
-        if isinstance(concave_hull, Polygon) :
-            # Single Polygon
-            x, y = concave_hull.exterior.xy
-            plt.plot(x, y, label="Concave Hull", color="red")
-        elif isinstance(concave_hull, MultiPolygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
-            # MultiPolygon
-            for polygon in concave_hull.geoms:  # Access individual polygons
-                x, y = polygon.exterior.xy
-                plt.plot(x, y, label="Concave Hull", color="red")
+                    if not  isinstance(concave_hull, Polygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
+                        alpha=0.1
+                        concave_hull = alphashape.alphashape(points, alpha)  
+                        
+            OCV_area_loss = concave_hull.area
+            
+            # # plot hull
+            # import matplotlib.pyplot as plt
+            # plt.figure()
+            # plt.scatter(points[:,0],points[:,1])
+            # if isinstance(concave_hull, Polygon) :
+            #     # Single Polygon
+            #     x, y = concave_hull.exterior.xy
+            #     plt.plot(x, y, label="Concave Hull", color="red")
+            # elif isinstance(concave_hull, MultiPolygon) or np.max( concave_hull.exterior.xy[1])< np.max(points[:,1]): # sometimes upper "linear" start segment gets lost, decrease alpha to avoid
+            #     # MultiPolygon
+            #     for polygon in concave_hull.geoms:  # Access individual polygons
+            #         x, y = polygon.exterior.xy
+            #         plt.plot(x, y, label="Concave Hull", color="red")
 
-
-        
-        # Log combined loss
-        self.log("OCV_area_loss", OCV_area_loss, on_epoch=True, prog_bar=True)
+            # Log combined loss
+            self.log("OCV_area_loss", OCV_area_loss, on_epoch=True, prog_bar=True)
+            
+        else:
+            
+            return relaxation_result_dict
                 
     
     
