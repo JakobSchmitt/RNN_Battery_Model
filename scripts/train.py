@@ -52,18 +52,18 @@ def main(cfg):
     pred_data_dirs = data.train_profiles+data.val_profiles+data.test_profiles
 
     if cfg.model_checkpoint == True:
-        # pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'best_model' 
-        # pretrained_checkpoint = list(pretrained_weights_path.glob('*.ckpt'))[0]
-        # model = EncoderDecoderGRU.load_from_checkpoint(pretrained_checkpoint)
+
         pretrained_weights_path = Path(cfg.pretrained_weights_dir) / 'weights' / 'all_epochs' 
         all_epoch_files = list(pretrained_weights_path.glob('*.ckpt'))
         all_epoch_files = sorted(all_epoch_files, key=os.path.getctime)
         pretrained_checkpoint = str(all_epoch_files[cfg.model_id]) 
-        model = EncoderDecoderGRU.load_from_checkpoint(Path(pretrained_checkpoint),pred_data_root_dir = data.root_dir,
-        pred_data_dirs = pred_data_dirs)
-        # model.pred_data_root_dir = data.root_dir
-        # model.pred_data_dirs = pred_data_dirs
-        model.relax_loss = cfg.relax_loss # update for potential loss adaptations
+        model = EncoderDecoderGRU.load_from_checkpoint(Path(pretrained_checkpoint),
+           pred_data_root_dir = data.root_dir,
+           pred_data_dirs = pred_data_dirs,
+           decoder_input_length = cfg.method.decoder_input_length,
+           relax_loss = cfg.relax_loss,
+           val_on_epoch_end = cfg.val_on_epoch_end)
+
         logging.info(f"{cfg.method.mode} : Model loaded using checkpoint")
     else:
         model = EncoderDecoderGRU(
@@ -84,7 +84,8 @@ def main(cfg):
             gpu = True if cfg.device =='gpu' else False,
             relax_loss = cfg.relax_loss,
             pred_data_root_dir = data.root_dir,
-            pred_data_dirs = pred_data_dirs
+            pred_data_dirs = pred_data_dirs,
+            val_on_epoch_end = cfg.val_on_epoch_end
         )
         logging.info(f"{cfg.method.mode} : Model loaded without checkpoint")
 
@@ -105,7 +106,6 @@ def main(cfg):
 
         )
 
-        
         trainer = L.Trainer(
             callbacks=[all_checkpoint_callback],# best_checkpoint_callback],#, load_best_weights_callback],
             max_epochs=cfg.epochs,
@@ -120,6 +120,7 @@ def main(cfg):
             max_epochs=cfg.epochs,
             accelerator=cfg.device,
             logger=wandb_logger,
+            
         )
 
 

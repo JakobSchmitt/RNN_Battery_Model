@@ -49,6 +49,7 @@ class EncoderDecoderGRU(LightningModule):
         relax_loss = False,
         pred_data_root_dir=None,#Path('C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/Data/121_stoch'),
         pred_data_dirs=None,#['0', '2', '5', '7', '8', '9', '10', '11', '12', '1', '4', '6', '13', '3']
+        val_on_epoch_end=True
         
     ):
         super().__init__()
@@ -120,6 +121,8 @@ class EncoderDecoderGRU(LightningModule):
         self.curve_dir = dict(zip(pred_data_dirs,[pred_data_root_dir / dir_id for dir_id in pred_data_dirs]))      
         
         self.curves = self.load_curves()
+        self.val_on_epoch_end =  val_on_epoch_end
+            
         
         
         self.save_hyperparameters()
@@ -190,163 +193,164 @@ class EncoderDecoderGRU(LightningModule):
         It computes the autoregressive loss by using only a small window of initial ground truth measurements.
         The first stage uses ground truth for the prediction, while the later stages use previous predicted data points for future predictions
         """
-        
-        # TODO: could be parallelised, so that all 6 profiles are predicted simulaneously?!
-        # start_time = time.time()
-        
-        profile_losses = []
+        if self.val_on_epoch_end:
 
-        for profile, curve in deepcopy(self.curves).items():
-
-            # Calculate the residual length for the final sample
-            last_sample_length = (
-                curve[self.encoder_input_length:].shape[0] % self.decoder_input_length
-            )
-            # Apply MinMax Normalization -> [0,1]
-            curve["voltage"] = (curve["voltage"] - self.voltage_min) / (self.voltage_max - self.voltage_min)
-            curve["current"] = (curve["current"] - self.current_min) / (self.current_max - self.current_min)
-
-            actual_voltage = torch.tensor(curve["voltage"], dtype=torch.float)
-            predicted_voltage = torch.zeros(curve.shape[0], dtype=torch.float)
-            curve_sliding_samples = sliding_window_view(
-                curve[self.encoder_input_length:], (self.decoder_input_length, 2)
-            ).squeeze()
-            curve_samples = torch.tensor(
-                np.concatenate(
-                    (
-                        curve_sliding_samples[::self.decoder_input_length],
-                        curve_sliding_samples[-1:],
-                    ),
-                    axis=0,
-                ),
-                dtype=torch.float,
-            )
-            encoder_input = (
-                torch.tensor(curve[:self.encoder_input_length].to_numpy(), dtype=torch.float)
-                .unsqueeze(0)
-                .to(self.comp_mode)
-            )
-            # use first 1980 current values as decoder input
-            decoder_input = curve_samples[0, :, 1].reshape(1, -1, 1).to(self.comp_mode)
-            # start prediction array with inital 20 voltage values 
-            predicted_voltage[:self.encoder_input_length] = encoder_input[:, :, 0]
-            # necessary to call eval() for prediction mode of model
-            self.eval()
-            with torch.inference_mode():
-                output = self(encoder_input, decoder_input)
-            # store output sequence of length 1980 in prediction voltage array (len of initial discharge curve)
-            predicted_voltage[
-                self.encoder_input_length : self.encoder_input_length + self.decoder_input_length
-            ] = output.squeeze()
-            for i in range(1, curve_samples.shape[0]):
-                # last prediction segment for profile
-                if i != curve_samples.shape[0] - 1:
-                    # setup current encoder_input : consisting of last 20 predictions from prev output 
-                    encoder_input = torch.cat(
-                        [
-                            output[:, -self.encoder_input_length:],
-                            decoder_input[:, -self.encoder_input_length:],
-                        ],
-                        dim=-1,
-                    )
-                    # get next current input 
-                    decoder_input = curve_samples[i, :, 1].reshape(1, -1, 1).to(self.comp_mode)
-                    self.eval()
-                    with torch.inference_mode():
-                        output = self(encoder_input, decoder_input)
-                    # store prediction
-                    predicted_voltage[
-                        self.encoder_input_length
-                        + i * self.decoder_input_length : self.encoder_input_length
-                        + (i + 1) * self.decoder_input_length
-                    ] = output.squeeze()
-                else:
-                    # setup this way, as encoder doesn't learn to initalise low voltage levels - lowest voltage level is length - 2000 ! so simply initalising with last_sample_length-20 doesnt work!
-                    encoder_input = torch.cat(
-                        [
-                            
-                            output[
-                                :,
-                                last_sample_length
-                                - self.decoder_input_length
-                                - self.encoder_input_length : last_sample_length
-                                - self.decoder_input_length,
-                            ],
-                            decoder_input[
-                                :,
-                                last_sample_length
-                                - self.decoder_input_length
-                                - self.encoder_input_length : last_sample_length
-                                - self.decoder_input_length,
-                            ],
-                        ],
-                        dim=-1,
-                    )
-
-                    decoder_input = curve_samples[-1, :, 1].reshape(1, -1, 1).to(self.comp_mode)
-                    self.eval()
-                    with torch.inference_mode():
-                        output = self(encoder_input, decoder_input)
-                    predicted_voltage[-self.decoder_input_length:] = output.squeeze()
-                    
-            # Denormalize
-            # actual_current = (
-            #     actual_current * (self.current_max - self.current_min)
-            #     + self.current_min
-            # )
-            predicted_voltage = (
-                predicted_voltage * (self.voltage_max - self.voltage_min)
-                + self.voltage_min
-            )
-            actual_voltage = (
-                actual_voltage * (self.voltage_max - self.voltage_min)
-                + self.voltage_min
-            )
+            # TODO: could be parallelised, so that all 6 profiles are predicted simulaneously?!
+            # start_time = time.time()
             
-            profile_loss = mean_absolute_error(predicted_voltage, actual_voltage)
-            profile_losses.append(profile_loss)
-
-
-            self.log(
-                f"profile_{profile}_mae",
-                mean_absolute_error(predicted_voltage, actual_voltage),
-                on_epoch=True,
-            )
-        
-        # Compute combined validation loss
-        avg_profile_loss = torch.stack(profile_losses).mean() 
-        # val_loss = self.trainer.callback_metrics["val_loss"]
-        # combined_val_loss = val_loss + avg_profile_loss
-        # Log combined loss
-        self.log("pred_loss", avg_profile_loss, on_epoch=True, prog_bar=True)
-        
-        if self.relax_loss:
-            if not self.area_loss_check: # check if model is sufficiently trained for area loss computation
-                if self.trainer.callback_metrics['val_mae_epoch'] < 0.03:
-                    self.area_loss_check = True
-                    print('model is sufficiently trained -> activate area_loss (OCV spread) computation and logging!!')
-                    
-        if self.relax_loss and  self.area_loss_check:
-            self.on_validation_epoch_end2()
-        else:
-            self.log("OCV_area_loss", np.nan, on_epoch=True, prog_bar=True)
-
-        
-        # End timing
-        # end_time = time.time()
-        # elapsed_time = end_time - start_time
-        
-        # self.log("on_validation_epoch_end_time", elapsed_time, prog_bar=False)
-        # try:
-        #     time_consumption = self.trainer.callback_metrics["on_validation_epoch_end_time"]
-        #     print(f"Validation profile time consumtion: {time_consumption*100:.1f} s")
-        # except:
-        #     pass
-
-        # call for further behavourial metric computation : OCV variance minimisation
-        
+            profile_losses = []
     
-    def on_validation_epoch_end2(self, SOH_testing=False, relaxation_length = 250,number_of_subsegments = 5 ,dropped_profiles_list=[]):
+            for profile, curve in deepcopy(self.curves).items():
+    
+                # Calculate the residual length for the final sample
+                last_sample_length = (
+                    curve[self.encoder_input_length:].shape[0] % self.decoder_input_length
+                )
+                # Apply MinMax Normalization -> [0,1]
+                curve["voltage"] = (curve["voltage"] - self.voltage_min) / (self.voltage_max - self.voltage_min)
+                curve["current"] = (curve["current"] - self.current_min) / (self.current_max - self.current_min)
+    
+                actual_voltage = torch.tensor(curve["voltage"], dtype=torch.float)
+                predicted_voltage = torch.zeros(curve.shape[0], dtype=torch.float)
+                curve_sliding_samples = sliding_window_view(
+                    curve[self.encoder_input_length:], (self.decoder_input_length, 2)
+                ).squeeze()
+                curve_samples = torch.tensor(
+                    np.concatenate(
+                        (
+                            curve_sliding_samples[::self.decoder_input_length],
+                            curve_sliding_samples[-1:],
+                        ),
+                        axis=0,
+                    ),
+                    dtype=torch.float,
+                )
+                encoder_input = (
+                    torch.tensor(curve[:self.encoder_input_length].to_numpy(), dtype=torch.float)
+                    .unsqueeze(0)
+                    .to(self.comp_mode)
+                )
+                # use first 1980 current values as decoder input
+                decoder_input = curve_samples[0, :, 1].reshape(1, -1, 1).to(self.comp_mode)
+                # start prediction array with inital 20 voltage values 
+                predicted_voltage[:self.encoder_input_length] = encoder_input[:, :, 0]
+                # necessary to call eval() for prediction mode of model
+                self.eval()
+                with torch.inference_mode():
+                    output = self(encoder_input, decoder_input)
+                # store output sequence of length 1980 in prediction voltage array (len of initial discharge curve)
+                predicted_voltage[
+                    self.encoder_input_length : self.encoder_input_length + self.decoder_input_length
+                ] = output.squeeze()
+                for i in range(1, curve_samples.shape[0]):
+                    # last prediction segment for profile
+                    if i != curve_samples.shape[0] - 1:
+                        # setup current encoder_input : consisting of last 20 predictions from prev output 
+                        encoder_input = torch.cat(
+                            [
+                                output[:, -self.encoder_input_length:],
+                                decoder_input[:, -self.encoder_input_length:],
+                            ],
+                            dim=-1,
+                        )
+                        # get next current input 
+                        decoder_input = curve_samples[i, :, 1].reshape(1, -1, 1).to(self.comp_mode)
+                        self.eval()
+                        with torch.inference_mode():
+                            output = self(encoder_input, decoder_input)
+                        # store prediction
+                        predicted_voltage[
+                            self.encoder_input_length
+                            + i * self.decoder_input_length : self.encoder_input_length
+                            + (i + 1) * self.decoder_input_length
+                        ] = output.squeeze()
+                    else:
+                        # setup this way, as encoder doesn't learn to initalise low voltage levels - lowest voltage level is length - 2000 ! so simply initalising with last_sample_length-20 doesnt work!
+                        encoder_input = torch.cat(
+                            [
+                                
+                                output[
+                                    :,
+                                    last_sample_length
+                                    - self.decoder_input_length
+                                    - self.encoder_input_length : last_sample_length
+                                    - self.decoder_input_length,
+                                ],
+                                decoder_input[
+                                    :,
+                                    last_sample_length
+                                    - self.decoder_input_length
+                                    - self.encoder_input_length : last_sample_length
+                                    - self.decoder_input_length,
+                                ],
+                            ],
+                            dim=-1,
+                        )
+    
+                        decoder_input = curve_samples[-1, :, 1].reshape(1, -1, 1).to(self.comp_mode)
+                        self.eval()
+                        with torch.inference_mode():
+                            output = self(encoder_input, decoder_input)
+                        predicted_voltage[-self.decoder_input_length:] = output.squeeze()
+                        
+                # Denormalize
+                # actual_current = (
+                #     actual_current * (self.current_max - self.current_min)
+                #     + self.current_min
+                # )
+                predicted_voltage = (
+                    predicted_voltage * (self.voltage_max - self.voltage_min)
+                    + self.voltage_min
+                )
+                actual_voltage = (
+                    actual_voltage * (self.voltage_max - self.voltage_min)
+                    + self.voltage_min
+                )
+                
+                profile_loss = mean_absolute_error(predicted_voltage, actual_voltage)
+                profile_losses.append(profile_loss)
+    
+    
+                self.log(
+                    f"profile_{profile}_mae",
+                    mean_absolute_error(predicted_voltage, actual_voltage),
+                    on_epoch=True,
+                )
+            
+            # Compute combined validation loss
+            avg_profile_loss = torch.stack(profile_losses).mean() 
+            # val_loss = self.trainer.callback_metrics["val_loss"]
+            # combined_val_loss = val_loss + avg_profile_loss
+            # Log combined loss
+            self.log("pred_loss", avg_profile_loss, on_epoch=True, prog_bar=True)
+            
+            if self.relax_loss:
+                if not self.area_loss_check: # check if model is sufficiently trained for area loss computation
+                    if self.trainer.callback_metrics['val_mae_epoch'] < 0.03:
+                        self.area_loss_check = True
+                        print('model is sufficiently trained -> activate area_loss (OCV spread) computation and logging!!')
+                        
+            if self.relax_loss and  self.area_loss_check:
+                self.on_validation_epoch_end2()
+            else:
+                self.log("OCV_area_loss", np.nan, on_epoch=True, prog_bar=True)
+    
+            
+            # End timing
+            # end_time = time.time()
+            # elapsed_time = end_time - start_time
+            
+            # self.log("on_validation_epoch_end_time", elapsed_time, prog_bar=False)
+            # try:
+            #     time_consumption = self.trainer.callback_metrics["on_validation_epoch_end_time"]
+            #     print(f"Validation profile time consumtion: {time_consumption*100:.1f} s")
+            # except:
+            #     pass
+    
+            # call for further behavourial metric computation : OCV variance minimisation
+            
+    
+    def on_validation_epoch_end2(self, SOH_testing=False, relaxation_length = 250,number_of_subsegments = 5 ,dropped_profiles_list=[] ):
         """
         relaxation pauses of length relaxation_length are added sequentially between the prediction sequences, 
         however the model doesn't really see this, as it is always initalised with the load steps before the terminal relaxation sequence
@@ -365,7 +369,8 @@ class EncoderDecoderGRU(LightningModule):
         """
         index_list = np.arange(1,number_of_subsegments)
         relaxation_result_dict = dict()
-        
+        boundary_dict = dict()
+
         scaled_relax_current =  (np.array([0]) - self.current_min) / ( self.current_max - self.current_min)
 
         for profile, curve in deepcopy(self.curves).items():
@@ -530,7 +535,7 @@ class EncoderDecoderGRU(LightningModule):
 
 
             relaxation_result_dict[profile] =  np.asarray(Q_OCV_list)
-            
+            # boundary_dict[profile] = [np.cumsum(curve["current"])[-1]]
 
 
         
@@ -581,8 +586,7 @@ class EncoderDecoderGRU(LightningModule):
             self.log("OCV_area_loss", OCV_area_loss, on_epoch=True, prog_bar=True)
             
         else:
-            
-            return relaxation_result_dict
+            return relaxation_result_dict #, boundary_dict
                 
     
     

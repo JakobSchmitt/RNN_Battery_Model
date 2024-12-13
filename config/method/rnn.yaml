@@ -1,18 +1,18 @@
 mode: SEFD
-root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\149
+root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\2.0_simple_upsampled_20
 
 # RNN Model parameters
 encoder_dim: 2
 decoder_dim: 1
-hidden_size: 64
+hidden_size: 32
 encoder_layers: 1
 decoder_layers: 1
 dropout: 0
 
 # DataModule parameters
-encoder_input_length: 180
-stride: 8 #16 # 64 # 32 # 16
-decoder_input_length: 1920 
+encoder_input_length: 20
+stride: 6 #12 # 64 # 32 # 16
+decoder_input_length:  1920
 batch_size: 256 # 64
 shuffle: True
 
@@ -20,5 +20,5 @@ shuffle: True
 normalize: True
 voltage_max: 4.2
 voltage_min: 2.5
-current_max: 1
-current_min: -2.5
+current_max: 25 #2.5  #1
+current_min: -10  # -1 #-2.5 # falsch skaliert bisher !?

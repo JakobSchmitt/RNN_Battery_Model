@@ -3,13 +3,12 @@ defaults:
   - logger: wandb
   - _self_
 
-model_1_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-09\16-59-40
-model_1_id: 215
-
-#model_2_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-06\17-41-23 # 129 (298 epoch)
-#model_2_id: 298
-model_2_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-09\17-53-37 # 
-model_2_id: 304
+# new
+model_1_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-12\19-40-48
+model_1_id: 1950
+# aged
+model_2_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-13\18-55-52
+model_2_id: 326 #378 #1998
 
 num_workers: 8  # Number of workers for DataLoader
 device: gpu

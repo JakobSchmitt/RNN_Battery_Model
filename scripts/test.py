@@ -47,10 +47,7 @@ def main(cfg):
     
     plot_voltage_profiles(current_profile_dict, voltage_profile_dict, prediction_profile_dict, profile_mae_loss,test_save_path)
 
-    # # Optionally save predictions
-    # with open("test_results.json", "w") as f:
-    #     json.dump(predictions, f)
-    
+
     
 
 
