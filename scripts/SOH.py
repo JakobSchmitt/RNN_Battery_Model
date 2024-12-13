@@ -17,6 +17,8 @@ from lightning.pytorch.loggers import WandbLogger
 
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+
 
 import matplotlib.pyplot as plt
 import os
@@ -34,8 +36,9 @@ num_of_seg = 15 # num of segments for relax point creation within a decoder pred
 relax_length = 200 # length of relax segment
 
 poly_deg = 3# degree for SOH regr
-rem_threshold = 0.02 # absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
-lin_model_fac = 0.5 # factor for lin model creation
+rem_threshold = 0.02 # influences only lin model -> points to keep : absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
+
+spread_control = 600
 
 dropped_profiles_list = list() # controlls which profile ids to be neglected in SOH computation
 @hydra.main(version_base="1.1", config_path="../config/", config_name="SOH")
@@ -62,7 +65,7 @@ def main(cfg):
                                                                                      number_of_subsegments = num_of_seg,
                                                                                      dropped_profiles_list=dropped_profiles_list) 
 
-    dropped_profiles_list = ['3','5','7','0','2','14','6','8','10','1' ] #,'16','18' 
+    dropped_profiles_list = [] #['3','5','7','0','2','14','6','8','10','1' ] #,'16','18' 
 
     model_2_relaxation_result_dict  = model_2.on_validation_epoch_end2(SOH_testing=True,relaxation_length=relax_length,
                                                                        number_of_subsegments = num_of_seg,
@@ -82,33 +85,41 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
 
 
     """
-    
+    plotting = True
     # points are scaled (Q and V)
     for key in model_1_relaxation_result_dict.keys():
         lin_data = model_1_relaxation_result_dict[key]
-        # plt.figure()
-        # plt.scatter(lin_data[:,0],lin_data[:,1])
+        # check if last values are artefacts and have same Q value:
+        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
+            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
+        if plotting:
+            plt.figure()
+            plt.scatter(lin_data[:,0],lin_data[:,1],label='raw data')
         Q_range = lin_data[:,0]
         outliers = np.zeros_like(lin_data[:,0], dtype=bool)  # Initialize a boolean mask for outliers
         previous_valid = lin_data[:,:][0]  # Start with the first point as valid
-        lin_threshold = np.median(np.diff(lin_data[:,1]))*lin_model_fac
+        lin_threshold = np.median(np.diff(lin_data[:,1]))
 
         for i in range(1, len(lin_data[:,1])):
-            if  lin_data[:,1][i] - previous_valid[1] > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/100: #handling of very large Q gaps and slightly lower OCV values, prev not recognised
+            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control) or ( (lin_data[:,0][i] - previous_valid[0]) > 700 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
                 outliers[i] = True  # Mark as outlier
             else:
                 previous_valid = lin_data[:,:][i]  # Update the reference point if the value is valid
         
-        lin_model = LinearRegression()
+        lin_model = Pipeline([
+            ('poly', PolynomialFeatures(degree=3)),
+            ('linear', LinearRegression())]) 
         lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1])
-        # plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1])
+        if plotting:
+            plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
         OCV_range = lin_model.predict(Q_range.reshape(-1,1))
+        plt.scatter(Q_range,OCV_range,c='cyan')
         keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold)) )[0]
-        
         model_1_relaxation_result_dict[key] = lin_data[keeper]
-        # plt.scatter(model_1_relaxation_result_dict[key][:,0],model_1_relaxation_result_dict[key][:,1])
-        # print('')
-
+        if plotting:
+            plt.scatter(model_1_relaxation_result_dict[key][:,0],model_1_relaxation_result_dict[key][:,1], label='filtered data')
+            plt.legend()
+            plt.title(f'new - {key}')
         
     model_1_points = np.vstack(list(model_1_relaxation_result_dict.values()))
 
@@ -120,32 +131,41 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
     model_1_x_scaled = (model_1_x - model_1_Q_min) / (model_1_Q_max - model_1_Q_min)
     
     
-    
+    plotting = False
     for key in model_2_relaxation_result_dict.keys():
         lin_data = model_2_relaxation_result_dict[key]
-        plt.figure()
-        plt.scatter(lin_data[:,0],lin_data[:,1])
+        # check if last values are artefacts and have same Q value:
+        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
+            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
+        if plotting:
+            plt.figure()
+            plt.scatter(lin_data[:,0],lin_data[:,1],label='raw data')
         Q_range = lin_data[:,0]
         outliers = np.zeros_like(lin_data[:,0], dtype=bool)  # Initialize a boolean mask for outliers
         previous_valid = lin_data[:,:][0]  # Start with the first point as valid
-        lin_threshold = np.median(np.diff(lin_data[:,1]))*lin_model_fac
+        lin_threshold = np.median(np.diff(lin_data[:,1]))
 
         for i in range(1, len(lin_data[:,1])):
-            if  lin_data[:,1][i] - previous_valid[1] > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/100:
+            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control ) or ( (lin_data[:,0][i] - previous_valid[0]) > 500 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
                 outliers[i] = True  # Mark as outlier
             else:
                 previous_valid = lin_data[:,:][i]  # Update the reference point if the value is valid
-        
-        lin_model = LinearRegression()
+            
+        # lin_model = LinearRegression()
+        lin_model = Pipeline([
+            ('poly', PolynomialFeatures(degree=3)),
+            ('linear', LinearRegression())]) 
         lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1]) #int(len(lin_data[~outliers])/4)
-        # plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1])
+        if plotting:
+            plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
         OCV_range = lin_model.predict(Q_range.reshape(-1,1))
         keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold)) )[0]
-
-        # keeper = np.where(abs(lin_data[:,1] - OCV_range) < rem_threshold)[0]
         model_2_relaxation_result_dict[key] = lin_data[keeper]
-        # plt.scatter(model_2_relaxation_result_dict[key][:,0],model_2_relaxation_result_dict[key][:,1])
-    
+        if plotting:
+            plt.scatter(model_2_relaxation_result_dict[key][:,0],model_2_relaxation_result_dict[key][:,1], label='filtered data')
+            plt.legend()
+            plt.title(f'aged - {key}')    
+        
     model_2_points = np.vstack(list(model_2_relaxation_result_dict.values()))
     model_2_x = model_2_points[:, 0]
     model_2_y_scaled = model_2_points[:, 1]

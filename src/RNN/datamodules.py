@@ -49,7 +49,7 @@ class UniDataModule(LightningDataModule):
     """
 
     def __init__(
-        self,
+        self, #
         mode: str,
         root_dir: Path,
         train_profiles: list = list(map(str, [12, 16, 18 ])),#[0,2,4,6,8,10,12,14,16,18] #['2','4','6'], # ["0","2","5","7","8","9","10","11","12"], #["1", "3", "6"],
