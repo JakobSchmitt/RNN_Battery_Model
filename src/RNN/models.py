@@ -119,12 +119,10 @@ class EncoderDecoderGRU(LightningModule):
         
         # Load curves into memory during initialization
         self.curve_dir = dict(zip(pred_data_dirs,[pred_data_root_dir / dir_id for dir_id in pred_data_dirs]))      
+        self.curves = self.load_curves(self.curve_dir)
         
-        self.curves = self.load_curves()
         self.val_on_epoch_end =  val_on_epoch_end
-            
-        
-        
+
         self.save_hyperparameters()
 
     def forward(self, encoder_input, decoder_input):
@@ -264,7 +262,7 @@ class EncoderDecoderGRU(LightningModule):
                             + i * self.decoder_input_length : self.encoder_input_length
                             + (i + 1) * self.decoder_input_length
                         ] = output.squeeze()
-                    else:
+                    elif last_sample_length>0:
                         # setup this way, as encoder doesn't learn to initalise low voltage levels - lowest voltage level is length - 2000 ! so simply initalising with last_sample_length-20 doesnt work!
                         encoder_input = torch.cat(
                             [
@@ -336,21 +334,8 @@ class EncoderDecoderGRU(LightningModule):
                 self.log("OCV_area_loss", np.nan, on_epoch=True, prog_bar=True)
     
             
-            # End timing
-            # end_time = time.time()
-            # elapsed_time = end_time - start_time
-            
-            # self.log("on_validation_epoch_end_time", elapsed_time, prog_bar=False)
-            # try:
-            #     time_consumption = self.trainer.callback_metrics["on_validation_epoch_end_time"]
-            #     print(f"Validation profile time consumtion: {time_consumption*100:.1f} s")
-            # except:
-            #     pass
     
-            # call for further behavourial metric computation : OCV variance minimisation
-            
-    
-    def on_validation_epoch_end2(self, SOH_testing=False, relaxation_length = 250,number_of_subsegments = 5 ,dropped_profiles_list=[] ):
+    def on_validation_epoch_end2(self, SOH_testing=False, relaxation_length = 250,number_of_subsegments = 5 ,dropped_profiles_list=[], additional_curve_dir = None, measurement_data_analysis=False ):
         """
         relaxation pauses of length relaxation_length are added sequentially between the prediction sequences, 
         however the model doesn't really see this, as it is always initalised with the load steps before the terminal relaxation sequence
@@ -369,9 +354,12 @@ class EncoderDecoderGRU(LightningModule):
         """
         index_list = np.arange(1,number_of_subsegments)
         relaxation_result_dict = dict()
-        boundary_dict = dict()
 
         scaled_relax_current =  (np.array([0]) - self.current_min) / ( self.current_max - self.current_min)
+        
+        if additional_curve_dir:
+            additional_curves = self.load_curves(additional_curve_dir)
+            self.curves.update(additional_curves)
 
         for profile, curve in deepcopy(self.curves).items():
             if profile in dropped_profiles_list:
@@ -405,12 +393,11 @@ class EncoderDecoderGRU(LightningModule):
             
             decoder_input = curve_samples[0, :, 1]
             actual_current = (curve_samples[0, :, 1]  * (self.current_max - self.current_min) + self.current_min)
-            
-            # necessary to call eval() for prediction mode of model
+
             self.eval()
             with torch.inference_mode():
                 for index in index_list:
-                    current_index = int(index*self.decoder_input_length /(len(index_list)+1))
+                    current_index = int(index*len(actual_current) /(len(index_list)))
                     Q_OCV_list.append(
                         np.array(
                             [
@@ -433,15 +420,13 @@ class EncoderDecoderGRU(LightningModule):
             
 
                 # complete decoder length prediction for storage
-                relaxated_decoder_input = torch.tensor(np.concatenate((decoder_input, np.full((relaxation_length),scaled_relax_current) ))
+                relaxated_decoder_input = torch.tensor(np.concatenate((decoder_input, np.full((relaxation_length),scaled_relax_current) ) )
                                                        .reshape(1, -1, 1),dtype=torch.float).to(self.comp_mode)
                 output = self(encoder_input, relaxated_decoder_input)
                 
-
-            Q_OCV_list.append(np.array([np.cumsum(actual_current)[-1] , output.squeeze()[-1].cpu()]))
             predicted_voltage[:len(output.squeeze())] = output.squeeze()
+            
             last_segment_Q_value = Q_OCV_list[-1][0]
-
             for i in range(1, curve_samples.shape[0]):
                 if i != curve_samples.shape[0] - 1:
                     # setup current encoder_input : consisting of last 20 predictions from prev output 
@@ -459,7 +444,7 @@ class EncoderDecoderGRU(LightningModule):
                     self.eval()
                     with torch.inference_mode():
                         for index in index_list:
-                            current_index = int(index*self.decoder_input_length /(len(index_list)+1))
+                            current_index = int(index*len(actual_current) /(len(index_list)))
 
                             Q_OCV_list.append(
                                 np.array(
@@ -484,29 +469,36 @@ class EncoderDecoderGRU(LightningModule):
                         relaxated_decoder_input = torch.tensor(np.concatenate((decoder_input, np.full((relaxation_length),scaled_relax_current) )).reshape(1, -1, 1),dtype=torch.float).to(self.comp_mode)
                         output = self(encoder_input, relaxated_decoder_input)
                         
-                    Q_OCV_list.append(np.array([last_segment_Q_value +  np.cumsum(actual_current)[-1] , output.squeeze()[-1].cpu()]))
                     predicted_voltage[ i * (self.decoder_input_length) :  (i + 1) * (self.decoder_input_length)] = output.squeeze()
                     last_segment_Q_value = Q_OCV_list[-1][0]
 
 
-
-                else:
+                else: # last segment residual
                     if last_sample_length>relaxation_length+self.encoder_input_length: # only if leftover segment is really relevant for OCV curve
+                        # encoder_input = torch.cat(
+                        #     [
+                        #         output[:,last_sample_length  - self.decoder_input_length - self.encoder_input_length - relaxation_length: last_sample_length - self.decoder_input_length - relaxation_length],
+                        #         relaxated_decoder_input[:,  last_sample_length  - self.decoder_input_length - self.encoder_input_length - relaxation_length : last_sample_length - self.decoder_input_length - relaxation_length],
+                        #     ],dim=-1)
                         encoder_input = torch.cat(
                             [
-                                output[:,last_sample_length  - self.decoder_input_length - self.encoder_input_length - relaxation_length: last_sample_length - self.decoder_input_length - relaxation_length],
-                                relaxated_decoder_input[:,  last_sample_length  - self.decoder_input_length - self.encoder_input_length - relaxation_length : last_sample_length - self.decoder_input_length - relaxation_length],
+                                output[:,last_sample_length  - self.decoder_input_length - self.encoder_input_length : last_sample_length - self.decoder_input_length ], # removed relaxation_length as decoder_input_length already contains it!
+                                relaxated_decoder_input[:,  last_sample_length  - self.decoder_input_length - self.encoder_input_length  : last_sample_length - self.decoder_input_length ],
                             ],dim=-1)
 
                         decoder_input = curve_samples[-1, :, 1]
-                        actual_current = (curve_samples[i, :, 1][-last_sample_length:] * (self.current_max - self.current_min)+ self.current_min)
-                        
+                        # actual_current = (curve_samples[i, :, 1][-last_sample_length:] * (self.current_max - self.current_min)+ self.current_min)
+                        actual_current = (curve_samples[-1, :, 1]  * (self.current_max - self.current_min)+ self.current_min)
+
+                        index_tracking_list = list() # for Q fixing
+                        temp_Q_OCV_list = list()
                         self.eval()
                         with torch.inference_mode():
+                            # mod_index_list = np.arange(1, int(number_of_subsegments* last_sample_length/(self.decoder_input_length-relaxation_length))) # elsewise too fine sampling of the last segment
                             for index in index_list:
-                                current_index = int(index*self.decoder_input_length /(len(index_list)+1))
-
-                                Q_OCV_list.append(
+                                current_index = int(index*len(actual_current) /(len(index_list)))
+                                index_tracking_list.append(current_index)
+                                temp_Q_OCV_list.append(
                                     np.array(
                                         [
                                             last_segment_Q_value + np.cumsum(actual_current[:current_index])[-1],
@@ -526,16 +518,29 @@ class EncoderDecoderGRU(LightningModule):
                                         ],
                                     )
                                 )
-    
+                            
                             relaxated_decoder_input = torch.tensor(np.concatenate((decoder_input, np.full((relaxation_length),scaled_relax_current) )).reshape(1, -1, 1),dtype=torch.float).to(self.comp_mode)
                             output = self(encoder_input, relaxated_decoder_input)
-                        Q_OCV_list.append( np.array([last_segment_Q_value+np.cumsum(actual_current)[-1] , output.squeeze()[-1].cpu()]))
+
+                        valid_last_segment_ids = np.where(np.asarray(index_tracking_list) > len(actual_current)-last_sample_length)[0]
+                        temp_Q_OCV_list = np.asarray(temp_Q_OCV_list)[valid_last_segment_ids]
+                        # correct Q value for every valid entry in temp_Q_OCV_list, as it is too big due to necessary encoder initalisation with higher voltage levels
+                        temp_Q_OCV_list[:,0] = temp_Q_OCV_list[:,0] - np.cumsum(actual_current[:-last_sample_length])[-1]
                         predicted_voltage[-(last_sample_length+relaxation_length):] = output.squeeze()[-(last_sample_length+relaxation_length):]
-                        last_segment_Q_value = Q_OCV_list[-1][0]
-
-
+                        # adjust Q for last_sample_length
+                        Q_OCV_list = np.vstack(( np.asarray(Q_OCV_list), temp_Q_OCV_list))
+                        
+                        
+            # for pause analysis with measured curve data
+            if measurement_data_analysis:
+                real_current = curve['current']* (self.current_max - self.current_min) + self.current_min
+                zero_ids = np.where(abs(real_current)<=0.02)[0]
+                breaks = np.diff(zero_ids) > 1
+                last_indices = zero_ids[np.where(breaks)[0]]  # Indices just before the breaks
+                last_indices = np.append(last_indices, zero_ids[-1])
+                Q_OCV_list = np.hstack(( np.expand_dims(np.cumsum(real_current)[last_indices],-1), np.expand_dims(curve['voltage'][last_indices],-1) ))
+            
             relaxation_result_dict[profile] =  np.asarray(Q_OCV_list)
-            # boundary_dict[profile] = [np.cumsum(curve["current"])[-1]]
 
 
         
@@ -730,9 +735,10 @@ class EncoderDecoderGRU(LightningModule):
         return optimizer
     
     
-    def load_curves(self):
+    def load_curves(self,local_curve_dir):
        """Load all curve CSV files into memory."""
+           
        curves = {}
-       for key, path in self.curve_dir.items():
+       for key, path in local_curve_dir.items():
            curves[key] = pd.read_csv(path / os.listdir(path)[0], usecols=["voltage", "current"])
        return curves

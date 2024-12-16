@@ -19,7 +19,6 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 
-
 import matplotlib.pyplot as plt
 import os
 import torch
@@ -35,10 +34,10 @@ from sklearn.metrics import (
 num_of_seg = 15 # num of segments for relax point creation within a decoder prediction length
 relax_length = 200 # length of relax segment
 
-poly_deg = 3# degree for SOH regr
-rem_threshold = 0.02 # influences only lin model -> points to keep : absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
+poly_deg = 5 # degree for SOH regr
+rem_threshold = 0.04 #  points to keep : absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
 
-spread_control = 600
+spread_control = 600 #
 
 dropped_profiles_list = list() # controlls which profile ids to be neglected in SOH computation
 @hydra.main(version_base="1.1", config_path="../config/", config_name="SOH")
@@ -58,19 +57,36 @@ def main(cfg):
     model_2_all_epoch_files = sorted(model_2_all_epoch_files, key=os.path.getctime)
     model_2_path = str(model_2_all_epoch_files[cfg.model_2_id])
     model_2 = EncoderDecoderGRU.load_from_checkpoint(Path(model_2_path))
+    
     logging.info(f"{cfg.method.mode} : Model 2 loaded using checkpoint")
 
+    additional_data_dirs = [] #['1','3','5','7','9','11','13','15','17' ]
     dropped_profiles_list = []
+
+
+    if len(additional_data_dirs)>0:
+        additional_data_root_dir = Path('C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/Data/2.3_simple_upsampled_20')
+        additional_curve_dir = dict(zip(additional_data_dirs,[additional_data_root_dir / dir_id for dir_id in additional_data_dirs]))     # None else  
+    else:
+        additional_curve_dir = None
     model_1_relaxation_result_dict = model_1.on_validation_epoch_end2(SOH_testing=True,relaxation_length=relax_length,
                                                                                      number_of_subsegments = num_of_seg,
-                                                                                     dropped_profiles_list=dropped_profiles_list) 
-
+                                                                                     dropped_profiles_list=dropped_profiles_list,
+                                                                                     additional_curve_dir = additional_curve_dir,
+                                                                                     measurement_data_analysis = measurement_data_analysis) 
+    additional_data_dirs =   []
     dropped_profiles_list = [] #['3','5','7','0','2','14','6','8','10','1' ] #,'16','18' 
 
+    if len(additional_data_dirs)>0:
+        additional_data_root_dir = Path('C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/Data/2.0_simple_upsampled_20')
+        additional_curve_dir = dict(zip(additional_data_dirs,[additional_data_root_dir / dir_id for dir_id in additional_data_dirs]))     # None else  
+    else:
+        additional_curve_dir = None
     model_2_relaxation_result_dict  = model_2.on_validation_epoch_end2(SOH_testing=True,relaxation_length=relax_length,
                                                                        number_of_subsegments = num_of_seg,
-                                                                       dropped_profiles_list=dropped_profiles_list)
-
+                                                                       dropped_profiles_list=dropped_profiles_list,
+                                                                       additional_curve_dir = additional_curve_dir,
+                                                                       measurement_data_analysis = measurement_data_analysis) 
     
     test_save_path =  Path(cfg.model_2_pretrained_weights_dir) / "SOH_plots"
     test_save_path.mkdir(parents=True, exist_ok=True)
@@ -90,30 +106,45 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
     for key in model_1_relaxation_result_dict.keys():
         lin_data = model_1_relaxation_result_dict[key]
         # check if last values are artefacts and have same Q value:
-        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
-            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
         if plotting:
             plt.figure()
             plt.scatter(lin_data[:,0],lin_data[:,1],label='raw data')
+        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
+            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
+        
         Q_range = lin_data[:,0]
         outliers = np.zeros_like(lin_data[:,0], dtype=bool)  # Initialize a boolean mask for outliers
         previous_valid = lin_data[:,:][0]  # Start with the first point as valid
         lin_threshold = np.median(np.diff(lin_data[:,1]))
 
         for i in range(1, len(lin_data[:,1])):
-            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control) or ( (lin_data[:,0][i] - previous_valid[0]) > 700 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
+            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control) or ( (lin_data[:,0][i] - previous_valid[0]) > 1700 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
                 outliers[i] = True  # Mark as outlier
             else:
                 previous_valid = lin_data[:,:][i]  # Update the reference point if the value is valid
-        
+        if min(lin_data[:,1])<0.4:
+            degree=5
+        else:
+            degree=4
         lin_model = Pipeline([
-            ('poly', PolynomialFeatures(degree=3)),
+            ('poly', PolynomialFeatures(degree=degree)),
             ('linear', LinearRegression())]) 
+        
         lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1])
         if plotting:
             plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
         OCV_range = lin_model.predict(Q_range.reshape(-1,1))
-        plt.scatter(Q_range,OCV_range,c='cyan')
+        if OCV_range[-1]>OCV_range[-2]:
+            # fix wrong model degree
+            lin_model = Pipeline([
+                ('poly', PolynomialFeatures(degree=degree-1)),
+                ('linear', LinearRegression())]) 
+            lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1])
+            if plotting:
+                plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
+            OCV_range = lin_model.predict(Q_range.reshape(-1,1))
+        if plotting:
+            plt.plot(Q_range,OCV_range,color='cyan')
         keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold)) )[0]
         model_1_relaxation_result_dict[key] = lin_data[keeper]
         if plotting:
@@ -131,34 +162,51 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
     model_1_x_scaled = (model_1_x - model_1_Q_min) / (model_1_Q_max - model_1_Q_min)
     
     
-    plotting = False
+    plotting = True
     for key in model_2_relaxation_result_dict.keys():
         lin_data = model_2_relaxation_result_dict[key]
         # check if last values are artefacts and have same Q value:
-        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
-            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
         if plotting:
             plt.figure()
             plt.scatter(lin_data[:,0],lin_data[:,1],label='raw data')
+        if np.abs(np.diff(lin_data[-2:,0]))< 1:            # remove all artefacts
+            lin_data = lin_data[np.where(np.abs(np.diff(lin_data[:,0]))> 1)[0],:]
+        
         Q_range = lin_data[:,0]
         outliers = np.zeros_like(lin_data[:,0], dtype=bool)  # Initialize a boolean mask for outliers
         previous_valid = lin_data[:,:][0]  # Start with the first point as valid
         lin_threshold = np.median(np.diff(lin_data[:,1]))
 
         for i in range(1, len(lin_data[:,1])):
-            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control ) or ( (lin_data[:,0][i] - previous_valid[0]) > 500 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
+            if   ( ( lin_data[:,1][i] - previous_valid[1] ) > lin_threshold * (lin_data[:,0][i] - previous_valid[0])/spread_control ) or ( (lin_data[:,0][i] - previous_valid[0]) > 1700 ) or ( (lin_data[:,0][i] - previous_valid[0]) < 25 ): 
                 outliers[i] = True  # Mark as outlier
             else:
                 previous_valid = lin_data[:,:][i]  # Update the reference point if the value is valid
             
-        # lin_model = LinearRegression()
+        if min(lin_data[:,1])<0.4:
+            degree=5
+        else:
+            degree=3
         lin_model = Pipeline([
-            ('poly', PolynomialFeatures(degree=3)),
+            ('poly', PolynomialFeatures(degree=degree)),
             ('linear', LinearRegression())]) 
+        
         lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1]) #int(len(lin_data[~outliers])/4)
         if plotting:
             plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
         OCV_range = lin_model.predict(Q_range.reshape(-1,1))
+        if OCV_range[-1]>OCV_range[-2]:
+            # fix wrong model degree
+            lin_model = Pipeline([
+                ('poly', PolynomialFeatures(degree=degree-1)),
+                ('linear', LinearRegression())]) 
+            lin_model.fit(lin_data[~outliers][:,0].reshape(-1,1) ,lin_data[~outliers][:,1])
+            if plotting:
+                plt.scatter(lin_data[~outliers][:,0],lin_data[~outliers][:,1],label='ohne outlier - lin fit')
+            OCV_range = lin_model.predict(Q_range.reshape(-1,1))
+        if plotting:
+            plt.plot(Q_range,OCV_range,color='cyan')
+
         keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold)) )[0]
         model_2_relaxation_result_dict[key] = lin_data[keeper]
         if plotting:
@@ -181,31 +229,32 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
     y_scaled_range = np.linspace(scaled_comb_y_min,scaled_comb_y_max,2000)
     y_range = y_scaled_range*(cfg.method.voltage_max - cfg.method.voltage_min) +  cfg.method.voltage_min
 
+
+    model_1_regr = Pipeline([
+        ('poly', PolynomialFeatures(degree=poly_deg)),
+        ('linear', LinearRegression())]) 
+    model_1_regr.fit(model_1_y_scaled.reshape(-1, 1), model_1_x_scaled )
+    model_1_regr_predictions_scaled = model_1_regr.predict(y_scaled_range.reshape(-1, 1))
     
-    # model 1 - new
-    model_1_poly = PolynomialFeatures(degree=poly_deg).fit(model_1_y_scaled.reshape(-1, 1))
-    model_1_y_scaled_range_poly = model_1_poly.transform(y_scaled_range.reshape(-1, 1))
-    # regression
-    model_1_regr = LinearRegression()
-    model_1_regr.fit(model_1_poly.transform(model_1_y_scaled.reshape(-1, 1)),  model_1_x_scaled)
-    model_1_regr_predictions_scaled = model_1_regr.predict(model_1_y_scaled_range_poly)
+    
     model_1_regr_predictions =  model_1_regr_predictions_scaled * (model_1_Q_max - model_1_Q_min) + model_1_Q_min
     model_1_y_unscaled = model_1_y_scaled  * (cfg.method.voltage_max - cfg.method.voltage_min) + cfg.method.voltage_min 
     model_1_x_unscaled = model_1_x_scaled  * (model_1_Q_max - model_1_Q_min) + model_1_Q_min
     
-    # model 2 - aged
-    model_2_poly = PolynomialFeatures(degree=poly_deg).fit(model_2_y_scaled.reshape(-1, 1))
-    model_2_y_scaled_range_poly = model_2_poly.transform(y_scaled_range.reshape(-1, 1))
-    # regression
-    model_2_regr = LinearRegression()
-    model_2_regr.fit(model_2_poly.transform(model_2_y_scaled.reshape(-1, 1)), model_2_x_scaled )
-    model_2_regr_predictions_scaled = model_2_regr.predict( model_2_y_scaled_range_poly)
+
+
+    model_2_regr = Pipeline([
+        ('poly', PolynomialFeatures(degree=poly_deg)),
+        ('linear', LinearRegression())]) 
+    model_2_regr.fit(model_2_y_scaled.reshape(-1, 1), model_2_x_scaled )
+    model_2_regr_predictions_scaled = model_2_regr.predict( y_scaled_range.reshape(-1, 1))
+    
     model_2_regr_predictions =  model_2_regr_predictions_scaled  * (model_2_Q_max - model_2_Q_min) + model_2_Q_min
     model_2_y_unscaled = model_2_y_scaled* (cfg.method.voltage_max - cfg.method.voltage_min) + cfg.method.voltage_min 
     model_2_x_unscaled = model_2_x_scaled * (model_2_Q_max - model_2_Q_min) + model_2_Q_min
     
     
-    # num_neighbors = num_of_seg
+    # num_neighbors = num_of_seg-13
     # knn_1 = KNeighborsRegressor(n_neighbors=num_neighbors)
     # knn_1.fit(model_1_y_scaled.reshape(-1, 1) , model_1_x_scaled )
     # model_1_regr_predictions  = knn_1.predict(y_scaled_range.reshape(-1, 1)) * (model_1_Q_max - model_1_Q_min) + model_1_Q_min

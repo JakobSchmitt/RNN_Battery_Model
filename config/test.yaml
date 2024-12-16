@@ -5,8 +5,8 @@ defaults:
 
 model_checkpoint: True
 
-pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-13\15-52-36
-model_id: 37 #829 #1371
+pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-16\10-08-50
+model_id: 1988
 num_workers: 8  # Number of workers for DataLoader
 device: gpu
 

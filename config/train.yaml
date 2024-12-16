@@ -7,8 +7,8 @@ relax_loss: True
 val_on_epoch_end: True # wichtig für erste Trainingsstufe mit kurzen decoder längen
 debug: True
 model_checkpoint: True
-pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-12\22-29-29
-model_id: 1998
+pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-16\10-08-50
+model_id: 1988
 
 num_workers: 8  # Number of workers for DataLoader
 loss: mse

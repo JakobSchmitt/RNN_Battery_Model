@@ -49,7 +49,7 @@ def main(cfg):
         current_min=cfg.method.current_min,
         current_max=cfg.method.current_max,
     )
-    pred_data_dirs = data.train_profiles+data.val_profiles+data.test_profiles
+    pred_data_dirs = data.train_profiles#+data.val_profiles+data.test_profiles
 
     if cfg.model_checkpoint == True:
 
