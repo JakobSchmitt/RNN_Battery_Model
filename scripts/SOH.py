@@ -35,9 +35,11 @@ num_of_seg = 15 # num of segments for relax point creation within a decoder pred
 relax_length = 200 # length of relax segment
 
 poly_deg = 5 # degree for SOH regr
-rem_threshold = 0.04 #  points to keep : absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
+rem_threshold = 0.02 #  (für aged modell im code verdoppelt!) points to keep : absolute deviation threshold in V for linear model deviation computation -> removal of outlier (dependson num_of_seg)
 
 spread_control = 600 #
+
+measurement_data_analysis = True # for evaluation of pause segments in SOH experiments
 
 dropped_profiles_list = list() # controlls which profile ids to be neglected in SOH computation
 @hydra.main(version_base="1.1", config_path="../config/", config_name="SOH")
@@ -101,7 +103,7 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
 
 
     """
-    plotting = True
+    plotting = False
     # points are scaled (Q and V)
     for key in model_1_relaxation_result_dict.keys():
         lin_data = model_1_relaxation_result_dict[key]
@@ -162,7 +164,7 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
     model_1_x_scaled = (model_1_x - model_1_Q_min) / (model_1_Q_max - model_1_Q_min)
     
     
-    plotting = True
+    plotting = False
     for key in model_2_relaxation_result_dict.keys():
         lin_data = model_2_relaxation_result_dict[key]
         # check if last values are artefacts and have same Q value:
@@ -206,8 +208,9 @@ def compute_SOH(model_1_relaxation_result_dict, model_2_relaxation_result_dict ,
             OCV_range = lin_model.predict(Q_range.reshape(-1,1))
         if plotting:
             plt.plot(Q_range,OCV_range,color='cyan')
+            
 
-        keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold)) )[0]
+        keeper = np.where( (abs(lin_data[:,1] - OCV_range) < rem_threshold*2) | ((lin_data[:,1] - OCV_range < 0) &  (abs(lin_data[:,1] - OCV_range) < 2*rem_threshold*2)) )[0]
         model_2_relaxation_result_dict[key] = lin_data[keeper]
         if plotting:
             plt.scatter(model_2_relaxation_result_dict[key][:,0],model_2_relaxation_result_dict[key][:,1], label='filtered data')

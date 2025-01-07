@@ -534,7 +534,11 @@ class EncoderDecoderGRU(LightningModule):
             # for pause analysis with measured curve data
             if measurement_data_analysis:
                 real_current = curve['current']* (self.current_max - self.current_min) + self.current_min
-                zero_ids = np.where(abs(real_current)<=0.02)[0]
+                if min(abs(real_current))<0.05:
+                    zero_ids = np.where(abs(real_current)<=0.05)[0]
+                else:
+                    zero_ids = np.where(abs(real_current)<=0.4)[0]
+
                 breaks = np.diff(zero_ids) > 1
                 last_indices = zero_ids[np.where(breaks)[0]]  # Indices just before the breaks
                 last_indices = np.append(last_indices, zero_ids[-1])
