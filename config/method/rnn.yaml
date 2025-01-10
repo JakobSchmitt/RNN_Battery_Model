@@ -1,6 +1,5 @@
 mode: SEFD
-root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\2.0_simple_pausefree_upsampled_20(10A Schwelle)
-
+root_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\Data\2.0_temp_long_upsampled_20  
 # RNN Model parameters
 encoder_dim: 2
 decoder_dim: 1
@@ -11,7 +10,7 @@ dropout: 0
 
 # DataModule parameters
 encoder_input_length: 20
-stride: 4 #12 # 64 # 32 # 16
+stride: 4 #16
 decoder_input_length:  1920
 batch_size: 256 # 64
 shuffle: True

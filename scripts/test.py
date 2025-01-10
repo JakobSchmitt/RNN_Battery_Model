@@ -8,6 +8,12 @@ import hydra
 import logging
 from pathlib import Path
 import numpy as np
+import sys
+# Ensure the `src` directory is in `sys.path` - necessary as wrong RNN directory is referenced!
+src_path = Path("C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/src")
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 from RNN.datamodules import UniDataModule
 from RNN.models import EncoderDecoderGRU
 

@@ -4,11 +4,11 @@ defaults:
   - _self_
 
 # new
-model_1_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-12\19-40-48 #2024-12-16\20-51-24 #
-model_1_id: 1950 #147 #
+model_1_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2025-01-10/13-01-40
+model_1_id: 289
 # aged
-model_2_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2024-12-18\11-44-48
-model_2_id: 372
+model_2_pretrained_weights_dir: C:\Users\s8940173\Dokumente\GitHub\RNN_Battery_Model\outputs\2025-01-10/13-18-49
+model_2_id: 401
 
 num_workers: 8  # Number of workers for DataLoader
 device: gpu

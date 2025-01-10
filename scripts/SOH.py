@@ -8,6 +8,12 @@ import hydra
 import logging
 from pathlib import Path
 import numpy as np
+import sys
+# Ensure the `src` directory is in `sys.path` - necessary as wrong RNN directory is referenced!
+src_path = Path("C:/Users/s8940173/Dokumente/GitHub/RNN_Battery_Model/src")
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 from RNN.datamodules import UniDataModule
 from RNN.models import EncoderDecoderGRU
 from sklearn.neighbors import KNeighborsRegressor
@@ -31,7 +37,7 @@ from sklearn.metrics import (
     mean_squared_error
 )
 
-num_of_seg = 15 # num of segments for relax point creation within a decoder prediction length
+num_of_seg = 30 # num of segments for relax point creation within a decoder prediction length
 relax_length = 200 # length of relax segment
 
 poly_deg = 5 # degree for SOH regr
